@@ -24,8 +24,8 @@ semantic-diff-tracer は、レビュアーが差分を 1 行ずつ読み始め�
 
 <table>
 <tr>
-  <th align="left" width="50%">VSCode extension</th>
-  <th align="left" width="50%">TUI</th>
+  <th align="left">VSCode extension</th>
+  <th align="left">TUI</th>
 </tr>
 <tr>
   <td valign="top">
@@ -38,7 +38,8 @@ semantic-diff-tracer は、レビュアーが差分を 1 行ずつ読み始め�
 **インストール**（Marketplace から）：
 
 ```bash
-code --install-extension amaya382.semantic-diff-tracer
+code --install-extension \
+  amaya382.semantic-diff-tracer
 ```
 
 または Extensions ビュー（`Ctrl/Cmd+Shift+X`）で **Semantic Diff Tracer** を検索します。
@@ -54,7 +55,8 @@ code --install-extension amaya382.semantic-diff-tracer
 **インストール**（Homebrew から）：
 
 ```bash
-brew install amaya382/tap/semantic-diff-tracer
+brew install \
+  amaya382/tap/semantic-diff-tracer
 ```
 
 `semantic-diff-tracer` とその短縮エイリアス `sdt` の両方が入ります。

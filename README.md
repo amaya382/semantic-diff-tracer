@@ -24,8 +24,8 @@ Common to both surfaces: Git 2.20+, a GitHub account, and credentials for the LL
 
 <table>
 <tr>
-  <th align="left" width="50%">VSCode extension</th>
-  <th align="left" width="50%">TUI</th>
+  <th align="left">VSCode extension</th>
+  <th align="left">TUI</th>
 </tr>
 <tr>
   <td valign="top">
@@ -38,7 +38,8 @@ Common to both surfaces: Git 2.20+, a GitHub account, and credentials for the LL
 **Install** — from the Marketplace:
 
 ```bash
-code --install-extension amaya382.semantic-diff-tracer
+code --install-extension \
+  amaya382.semantic-diff-tracer
 ```
 
 Or search for **Semantic Diff Tracer** in the Extensions view (`Ctrl/Cmd+Shift+X`).
@@ -54,7 +55,8 @@ Or search for **Semantic Diff Tracer** in the Extensions view (`Ctrl/Cmd+Shift+X
 **Install** — via Homebrew:
 
 ```bash
-brew install amaya382/tap/semantic-diff-tracer
+brew install \
+  amaya382/tap/semantic-diff-tracer
 ```
 
 Provides both `semantic-diff-tracer` and its short alias `sdt`.
