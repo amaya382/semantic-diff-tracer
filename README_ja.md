@@ -20,31 +20,29 @@ semantic-diff-tracer は、レビュアーが差分を 1 行ずつ読み始め�
 
 ### 1. 要件
 
-- Node.js 20+
+- Node.js 20+（TUI の実行系。VSCode extension host も同じく必要）
 - VSCode 1.90+（extension を使う場合）
 - Git 2.20+
-- GitHub アカウント（VSCode 組み込みの `github` auth provider が OAuth を処理。PAT 不要）
+- GitHub アカウント。VSCode では組み込みの `github` auth provider が OAuth を処理し PAT 不要。TUI では `GITHUB_TOKEN` / `GH_TOKEN` を export
 - LLM バックエンドの資格情報。同梱される adapter は現在 Claude のみで、`claude` CLI での OAuth ログインか、`ANTHROPIC_API_KEY` / Vertex / Bedrock いずれかの構成を受け付けます
 
 ### 2. インストール
 
-VSCode Marketplace 未公開。ソースからビルドしてください。
+**VSCode 拡張** — Marketplace からインストール:
 
 ```bash
-git clone https://github.com/amaya382/semantic-diff-tracer.git
-cd semantic-diff-tracer
-npm install
-npm run build
+code --install-extension amaya382.semantic-diff-tracer
 ```
 
-生成された `.vsix` をインストール:
+または Extensions ビュー（`Ctrl/Cmd+Shift+X`）で **Semantic Diff Tracer** を検索。
+
+**TUI** — Homebrew でインストール:
 
 ```bash
-npm run package:vscode
-code --install-extension apps/vscode/semantic-diff-tracer-0.0.1.vsix
+brew install amaya382/tap/semantic-diff-tracer
 ```
 
-もしくは、VSCode で本リポジトリを開いて F5 で Extension Development Host を起動。
+`semantic-diff-tracer` とその短縮エイリアス `sdt` の両方が入ります。
 
 ### 3. PR を開く
 
@@ -160,11 +158,12 @@ spawn した CLI は SDK の isolation mode (`settingSources: []`) で走りま�
 ## 🖥️ TUI
 
 > [!WARNING]
-> TUI はまだ未実装です。`apps/tui` は最小の readline REPL scaffold を持つのみで、上で説明した観点リスト・Summary ビュー・Trace stepper は現時点で VSCode 限定です。
+> TUI はまだ未実装です。Homebrew formula が提供するのは最小の readline REPL scaffold のみで、上で説明した観点リスト・Summary ビュー・Trace stepper は現時点で VSCode 限定です。
 
 ```bash
-npm run build
-node apps/tui/dist/main.js <URL | owner/repo#N | #N | branch>
+semantic-diff-tracer <URL | owner/repo#N | #N | branch>
+# 短縮エイリアス
+sdt <URL | owner/repo#N | #N | branch>
 ```
 
 環境変数（`SDT_CLAUDE_*` は Claude adapter — 現状唯一の LLM バックエンド — に属します）:
@@ -179,12 +178,22 @@ node apps/tui/dist/main.js <URL | owner/repo#N | #N | branch>
 
 ## 🧪 開発
 
+ソースからのビルドは extension や TUI の開発時にのみ必要です。エンドユーザーは [クイックスタート](#-クイックスタート) の Marketplace / Homebrew を使ってください。
+
 ```bash
+git clone https://github.com/amaya382/semantic-diff-tracer.git
+cd semantic-diff-tracer
 npm install
 npm run build                     # 全 workspace をビルド
 npm test                          # packages/* に対する vitest
 npm run check:boundaries          # core が vscode / ターミナル UI を import しないことを強制
 npm run package:vscode            # apps/vscode/semantic-diff-tracer-*.vsix を生成
+```
+
+ローカルビルドした `.vsix` を VSCode に入れる場合:
+
+```bash
+code --install-extension apps/vscode/semantic-diff-tracer-0.0.1.vsix
 ```
 
 Extension Development Host:

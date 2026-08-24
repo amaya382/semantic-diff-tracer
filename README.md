@@ -20,31 +20,29 @@ semantic-diff-tracer is a VSCode extension with a companion TUI CLI that helps a
 
 ### 1. Requirements
 
-- Node.js 20+
+- Node.js 20+ (runtime for the TUI; also required by the VSCode extension host)
 - VSCode 1.90+ (for the extension)
 - Git 2.20+
-- A GitHub account (VSCode's built-in `github` auth provider handles the OAuth — no PAT required)
+- A GitHub account. In VSCode the built-in `github` auth provider handles the OAuth — no PAT required. For the TUI, export `GITHUB_TOKEN` or `GH_TOKEN`
 - Credentials for the LLM backend. The only backend that ships today is the Claude adapter, which takes OAuth via the `claude` CLI or an `ANTHROPIC_API_KEY` / Vertex / Bedrock setup
 
 ### 2. Install
 
-Not published to the VSCode Marketplace yet. Build from source:
+**VSCode extension** — install from the Marketplace:
 
 ```bash
-git clone https://github.com/amaya382/semantic-diff-tracer.git
-cd semantic-diff-tracer
-npm install
-npm run build
+code --install-extension amaya382.semantic-diff-tracer
 ```
 
-Install the packaged `.vsix`:
+Or search for **Semantic Diff Tracer** in the Extensions view (`Ctrl/Cmd+Shift+X`).
+
+**TUI** — install via Homebrew:
 
 ```bash
-npm run package:vscode
-code --install-extension apps/vscode/semantic-diff-tracer-0.0.1.vsix
+brew install amaya382/tap/semantic-diff-tracer
 ```
 
-Or launch an Extension Development Host: open the repo in VSCode and press F5.
+Provides both `semantic-diff-tracer` and its short alias `sdt`.
 
 ### 3. Open a PR
 
@@ -160,11 +158,12 @@ Provider credentials that normally live in `~/.claude/settings.json` need to arr
 ## 🖥️ TUI
 
 > [!WARNING]
-> The TUI is not yet implemented. `apps/tui` currently ships only a minimal readline REPL scaffold — the perspective list, Summary view, and Trace stepper described above are VSCode-only for now.
+> The TUI is not yet implemented. The Homebrew formula currently ships only a minimal readline REPL scaffold — the perspective list, Summary view, and Trace stepper described above are VSCode-only for now.
 
 ```bash
-npm run build
-node apps/tui/dist/main.js <URL | owner/repo#N | #N | branch>
+semantic-diff-tracer <URL | owner/repo#N | #N | branch>
+# or the shorter alias
+sdt <URL | owner/repo#N | #N | branch>
 ```
 
 Env vars (the `SDT_CLAUDE_*` entries belong to the Claude adapter — the only LLM backend that ships today):
@@ -179,12 +178,22 @@ Env vars (the `SDT_CLAUDE_*` entries belong to the Claude adapter — the only L
 
 ## 🧪 Development
 
+Building from source is only needed for hacking on the extension or the TUI; end users install via the Marketplace / Homebrew as shown in [Quick Start](#-quick-start).
+
 ```bash
+git clone https://github.com/amaya382/semantic-diff-tracer.git
+cd semantic-diff-tracer
 npm install
 npm run build                     # build every workspace
 npm test                          # vitest across packages/*
 npm run check:boundaries          # ensure core does not import vscode / terminal UI
 npm run package:vscode            # produce apps/vscode/semantic-diff-tracer-*.vsix
+```
+
+Install the locally-built `.vsix` into your VSCode:
+
+```bash
+code --install-extension apps/vscode/semantic-diff-tracer-0.0.1.vsix
 ```
 
 Extension development host:
