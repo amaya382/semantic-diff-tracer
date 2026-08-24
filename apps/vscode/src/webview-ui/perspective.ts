@@ -660,23 +660,43 @@ function buildTraceFlowOutline(flow: Flow, cursor: BlockPath): HTMLElement {
           icon: FOCAL_CODICON[b.focal.kind],
         });
       }
-      const byKind = new Map<MockKind, number>();
-      for (const m of b.mocks) byKind.set(m.kind, (byKind.get(m.kind) ?? 0) + 1);
+      // Same-kind mocks collapse to one icon-only chip; count and per-mock
+      // reasons live in the tooltip. Keeps the row from stacking N copies of
+      // the same glyph when a block wires several stubs.
+      const mocksByKind = new Map<MockKind, Mock[]>();
+      for (const m of b.mocks) {
+        const list = mocksByKind.get(m.kind);
+        if (list) list.push(m);
+        else mocksByKind.set(m.kind, [m]);
+      }
       for (const kind of MOCK_KINDS) {
-        const n = byKind.get(kind);
-        if (!n) continue;
+        const list = mocksByKind.get(kind);
+        if (!list || list.length === 0) continue;
+        const heading = `${list.length} ${MOCK_LABEL[kind]}${list.length === 1 ? '' : 's'}`;
+        const lines = list.map((m) => `• ${m.symbol || m.id}${m.reason ? ` — ${m.reason}` : ''}`);
         cs.push({
-          text: n > 1 ? String(n) : undefined,
           kind: `mock mock-${kind}`,
-          title: `${n} ${MOCK_LABEL[kind]}${n === 1 ? '' : 's'}`,
+          title: [heading, ...lines].join('\n'),
           icon: MOCK_CODICON[kind],
         });
       }
+      // Same-severity concerns collapse the same way, so a block with three
+      // warnings does not print three identical chips.
+      const concernsBySeverity = new Map<Severity, typeof b.concerns>();
       for (const c of b.concerns) {
+        const list = concernsBySeverity.get(c.severity);
+        if (list) list.push(c);
+        else concernsBySeverity.set(c.severity, [c]);
+      }
+      for (const severity of ['error', 'warn', 'info'] as const) {
+        const list = concernsBySeverity.get(severity);
+        if (!list || list.length === 0) continue;
+        const heading = `${list.length} ${severity}${list.length === 1 ? '' : 's'}`;
+        const lines = list.map((c) => `• ${c.message}`);
         cs.push({
-          kind: c.severity,
-          title: c.message,
-          icon: CONCERN_CODICON[c.severity],
+          kind: severity,
+          title: [heading, ...lines].join('\n'),
+          icon: CONCERN_CODICON[severity],
         });
       }
       return cs;
@@ -2136,12 +2156,13 @@ function installStyles(): void {
     .concern.sev-error .sev-chip { background: var(--vscode-editorError-foreground); color: var(--vscode-editor-background); }
     .concern-jump { font-family: var(--vscode-editor-font-family, monospace); opacity: 0.75; font-size: 0.7rem; }
     /* Focal card — kind-tinted left border, kind-tinted heading icon, plain
-       reason underneath. Distinct from concerns (severity colours) and mocks
-       (kind glyphs) so the three axes read as three axes. */
+       reason underneath. Core owns the loud warm accent so the reader's eye
+       lands there first; entry and contract get cooler hues so the three
+       kinds stay separable but do not compete with core. */
     .card.small.focal { border-left: 3px solid var(--focal-accent); padding-left: 0.6rem; }
-    .card.small.focal.focal-core { --focal-accent: var(--vscode-charts-blue, #4a90e2); }
-    .card.small.focal.focal-entry { --focal-accent: var(--vscode-charts-green, #4caf50); }
-    .card.small.focal.focal-contract { --focal-accent: var(--vscode-charts-orange, #d9822b); }
+    .card.small.focal.focal-core { --focal-accent: var(--vscode-charts-red, #f14c4c); }
+    .card.small.focal.focal-entry { --focal-accent: var(--vscode-charts-purple, #b180d7); }
+    .card.small.focal.focal-contract { --focal-accent: var(--vscode-charts-yellow, #d7ba7d); }
     .focal-heading { display: flex; align-items: center; gap: 0.35rem; color: var(--focal-accent); margin: 0 0 0.25rem; }
     .focal-heading-icon { font-size: 0.9rem; line-height: 1; }
     .focal-heading-text { font-size: 0.85rem; font-weight: 600; }
@@ -2156,9 +2177,13 @@ function installStyles(): void {
     .mock-symbol { grid-column: 1; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
     .mock-kind { grid-column: 2; justify-self: end; font-size: 0.66rem; text-transform: uppercase; white-space: nowrap; opacity: 0.9; display: inline-flex; align-items: center; gap: 0.25rem; }
     .mock-kind-icon { font-size: 0.85rem; line-height: 1; }
-    .mock-kind.mock-stub { color: var(--vscode-charts-blue, #4a90e2); }
-    .mock-kind.mock-value { color: var(--vscode-charts-green, #4caf50); }
-    .mock-kind.mock-skip { color: var(--vscode-descriptionForeground, #888); }
+    /* Mocks are ancillary — the reader scans them, not decides from them —
+       so the three kinds share a muted foreground tone and rely on the glyph
+       (replace / pin / circle-slash) for the distinction. Skip drops an
+       extra step because an untaken path deserves the least ink. */
+    .mock-kind.mock-stub { color: var(--vscode-descriptionForeground, #a0a0a0); }
+    .mock-kind.mock-value { color: var(--vscode-descriptionForeground, #a0a0a0); opacity: 0.85; }
+    .mock-kind.mock-skip { color: var(--vscode-descriptionForeground, #a0a0a0); opacity: 0.65; }
     .mock-reason { grid-column: 1 / -1; font-size: 0.72rem; opacity: 0.8; min-width: 0; overflow-wrap: anywhere; }
     .mock-current, .mock-file { margin-top: 0.3rem; font-size: 0.75rem; opacity: 0.85; min-width: 0; overflow-wrap: anywhere; }
     /* Mock values can be pasted JSON — keep the newlines, wrap the long lines. */
@@ -2276,9 +2301,9 @@ function installStyles(): void {
     .gutter { display: grid; grid-template-columns: 1rem 2rem; align-items: baseline; column-gap: 0.25rem; text-align: right; color: var(--vscode-editorLineNumber-foreground); user-select: none; width: 3.5rem; }
     .gutter-line { grid-column: 2; }
     .focal-gutter-icon { grid-column: 1; justify-self: center; font-size: 0.9rem; line-height: 1; color: var(--focal-gutter-color, var(--vscode-editorInfo-foreground)); }
-    .code-line.focal-core { --focal-gutter-color: var(--vscode-charts-blue, #4a90e2); }
-    .code-line.focal-entry { --focal-gutter-color: var(--vscode-charts-green, #4caf50); }
-    .code-line.focal-contract { --focal-gutter-color: var(--vscode-charts-orange, #d9822b); }
+    .code-line.focal-core { --focal-gutter-color: var(--vscode-charts-red, #f14c4c); }
+    .code-line.focal-entry { --focal-gutter-color: var(--vscode-charts-purple, #b180d7); }
+    .code-line.focal-contract { --focal-gutter-color: var(--vscode-charts-yellow, #d7ba7d); }
     .code-line.focus { background: var(--vscode-editor-selectionBackground, rgba(120, 150, 200, 0.25)); }
     .code-line.focus .gutter { color: var(--vscode-editorLineNumber-activeForeground); }
     .code-line.focus-before { background: color-mix(in srgb, var(--vscode-gitDecoration-deletedResourceForeground, #e06c75) 18%, transparent); }
