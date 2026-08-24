@@ -174,8 +174,6 @@ export function buildFlowUserMessage(perspective: PerspectiveDraft): string {
   return `Perspective: ${perspective.title}
 Kind: ${perspective.kind}
 Outcome: ${perspective.outcome}
-Primary files:
-${perspective.primaryFiles.map((f) => `- ${f}`).join('\n')}
 Hunks in scope:
 ${hunks}
 

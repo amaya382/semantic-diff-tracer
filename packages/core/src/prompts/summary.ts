@@ -74,8 +74,6 @@ export function buildSummaryUserMessage(perspective: PerspectiveDraft): string {
   return `Perspective: ${perspective.title}
 Outcome: ${perspective.outcome}
 Kind: ${perspective.kind}
-Primary files:
-${perspective.primaryFiles.map((f) => `- ${f}`).join('\n')}
 Hunks:
 ${hunks}
 

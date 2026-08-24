@@ -9,7 +9,7 @@ Extract from the diff itself, not from a fixed taxonomy. The number varies by PR
 - Start from what became **possible or different** after this merge. Each such outcome is a candidate perspective.
 - Fold pure-mechanical changes (renames, moves, formatting) into the perspective they serve. If they serve none, group them last under "Incidental changes".
 - Tests, docs, and fixtures belong under the perspective they exercise, not in their own bucket — unless the PR is genuinely a test-only or docs-only change.
-- If two candidates share more than half their files, they are one perspective with two facets. Merge and note the facets as sub-bullets.
+- If two candidates share more than half their hunks, they are one perspective with two facets. Merge and note the facets as sub-bullets.
 - If a candidate has only one hunk and no downstream effect, demote it into a neighboring perspective or into "Incidental changes".
 
 Order by importance to the reviewer's decision: the ones needing careful reading first, incidental last. Not by file path, not by commit sequence.
@@ -40,7 +40,6 @@ Output STRICT JSON matching this TypeScript type (no prose, no markdown fences):
       "title": string,            // 2-6 words
       "outcome": string,          // one line: what became possible or different
       "hunkRefs": [{"file": string, "hunkIndex": number}],
-      "primaryFiles": string[],
       "kind": "feature" | "fix" | "refactor" | "api" | "schema" | "config" | "deps" | "docs" | "test"
     }
   ],

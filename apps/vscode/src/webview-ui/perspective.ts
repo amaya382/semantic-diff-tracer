@@ -1298,8 +1298,6 @@ function buildRightSummary(pane: HTMLElement): void {
   for (const v of snapshot.summary.summary.visuals) {
     pane.append(buildVisualCard(v));
   }
-  const files = buildFilesTouchedCard(snapshot.perspective, snapshot.flow);
-  if (files) pane.append(files);
   if (snapshot.summary.summary.watchFor.length > 0) {
     pane.append(buildWatchForCard(snapshot.summary));
   }
@@ -1486,50 +1484,6 @@ async function renderMermaidInto(host: HTMLElement, source: string): Promise<voi
       el('pre', { class: 'visual-fallback', text: source }),
     );
   }
-}
-
-function buildFilesTouchedCard(
-  p: PerspectiveDraft,
-  flow: Flow | undefined,
-): HTMLElement | null {
-  const counts = new Map<string, number>();
-  if (flow) {
-    const walk = (blocks: FlowBlock[]): void => {
-      for (const b of blocks) {
-        counts.set(b.focus.file, (counts.get(b.focus.file) ?? 0) + 1);
-        walk(b.children);
-      }
-    };
-    walk(flow.blocks);
-  } else {
-    for (const f of p.primaryFiles) counts.set(f, 1);
-  }
-  const files = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  if (files.length === 0) return null;
-  const max = files[0]![1];
-  const list = el('ul', { class: 'files-touched' });
-  for (const [pathStr, c] of files) {
-    list.append(
-      el('li', {
-        class: 'file-row',
-        children: [
-          el('span', {
-            class: 'file-bar',
-            attrs: { style: `--w: ${Math.max(6, Math.round((c / max) * 100))}%` },
-          }),
-          el('span', {
-            class: 'file-count',
-            text: flow ? `${c} block${c === 1 ? '' : 's'}` : '',
-          }),
-          el('code', { class: 'file-path', text: pathStr }),
-        ],
-      }),
-    );
-  }
-  return el('section', {
-    class: 'card files-touched-card',
-    children: [el('h3', { text: 'Files touched' }), list],
-  });
 }
 
 function buildWatchForCard(payload: SummaryPayload): HTMLElement {
@@ -2256,14 +2210,6 @@ function installStyles(): void {
     .title-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
     .title-row h1 { font-size: 1.15rem; margin: 0; }
     .outcome-text { margin: 0; font-size: 0.88rem; line-height: 1.45; }
-    /* Bar and block count lead; the path is the trailing column, matching the
-       locator-on-the-right rule the Watch-for and Tests rows follow. The auto
-       count column makes every path start at the same x. */
-    .files-touched { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.15rem; }
-    .file-row { display: grid; grid-template-columns: 32px auto minmax(0, 1fr); align-items: center; gap: 0.4rem; font-size: 0.75rem; }
-    .file-bar { height: 4px; border-radius: 2px; background: var(--vscode-charts-blue, #4a90e2); width: var(--w, 100%); opacity: 0.85; }
-    .file-path { font-family: var(--vscode-editor-font-family, monospace); overflow-wrap: anywhere; }
-    .file-count { font-size: 0.66rem; opacity: 0.6; white-space: nowrap; }
     /* Note first, locator pinned right. */
     .watch-list, .test-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.35rem; }
     .watch-item, .test-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 0.15rem 0.5rem; font-size: 0.85rem; line-height: 1.4; }

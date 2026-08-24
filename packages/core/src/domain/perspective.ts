@@ -60,7 +60,6 @@ export interface PerspectiveDraft {
   title: string;
   outcome: string;
   hunkRefs: HunkRef[];
-  primaryFiles: string[];
   kind: PerspectiveKind;
 }
 

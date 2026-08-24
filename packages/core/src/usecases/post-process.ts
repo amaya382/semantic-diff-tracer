@@ -11,42 +11,15 @@ const MERGE_THRESHOLD = 0.5;
 /** Kind the LLM falls back to when it answers with something unknown. */
 const DEFAULT_KIND: PerspectiveKind = 'feature';
 
-/**
- * Path shapes that settle the kind on their own. Checked in order, and only
- * when *every* primary file matches: a perspective mixing config with source is
- * about the source, so the LLM's judgement stands.
- */
-const KIND_BY_PATH: Array<{ kind: PerspectiveKind; matches: (file: string) => boolean }> = [
-  {
-    kind: 'test',
-    matches: (f) =>
-      /(^|\/)(__tests__|e2e|fixtures|testdata)\//.test(f) || /\.(test|spec)\.[^./]+$/.test(f),
-  },
-  {
-    kind: 'docs',
-    matches: (f) => /(^|\/)docs\//.test(f) || /\.mdx?$/.test(f) || /(^|\/)LICENSE$/.test(f),
-  },
-  {
-    kind: 'deps',
-    matches: (f) =>
-      /(^|\/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|poetry\.lock|go\.sum|go\.mod|requirements\.txt)$/.test(
-        f,
-      ),
-  },
-  {
-    kind: 'config',
-    matches: (f) =>
-      /(^|\/)\.github\//.test(f) ||
-      /\.(ya?ml|toml|ini|tf)$/.test(f) ||
-      /(^|\/)Dockerfile[^/]*$/.test(f) ||
-      /(^|\/)tsconfig[^/]*\.json$/.test(f) ||
-      /\.config\.(js|ts|mjs|cjs)$/.test(f),
-  },
-];
+function filesOf(p: PerspectiveDraft): Set<string> {
+  const s = new Set<string>();
+  for (const h of p.hunkRefs) s.add(h.file);
+  return s;
+}
 
 function fileOverlap(a: PerspectiveDraft, b: PerspectiveDraft): number {
-  const setA = new Set(a.primaryFiles);
-  const setB = new Set(b.primaryFiles);
+  const setA = filesOf(a);
+  const setB = filesOf(b);
   if (setA.size === 0 || setB.size === 0) return 0;
   let intersection = 0;
   for (const f of setA) if (setB.has(f)) intersection++;
@@ -71,13 +44,11 @@ function mergePair(a: PerspectiveDraft, b: PerspectiveDraft): PerspectiveDraft {
   for (const h of b.hunkRefs) {
     if (!hunks.some((x) => x.file === h.file && x.hunkIndex === h.hunkIndex)) hunks.push(h);
   }
-  const files = Array.from(new Set([...a.primaryFiles, ...b.primaryFiles]));
   return {
     id: a.id,
     title: `${a.title} + ${b.title}`,
     outcome: `${a.outcome}; also: ${b.outcome}`,
     hunkRefs: hunks,
-    primaryFiles: files,
     kind: dominantKind(normalizeKind(a.kind), normalizeKind(b.kind)),
   };
 }
@@ -104,8 +75,7 @@ export function demoteSingletons(set: PerspectiveSet): PerspectiveSet {
   const keep: PerspectiveDraft[] = [];
   const demoted: IncidentalChange[] = [];
   for (const p of set.perspectives) {
-    const isTrivial = p.hunkRefs.length === 1 && p.primaryFiles.length === 1;
-    if (isTrivial) {
+    if (p.hunkRefs.length === 1) {
       demoted.push({
         category: 'other',
         hunkRefs: p.hunkRefs,
@@ -122,16 +92,8 @@ export function demoteSingletons(set: PerspectiveSet): PerspectiveSet {
   };
 }
 
-export function refineKind(perspectives: PerspectiveDraft[]): PerspectiveDraft[] {
-  return perspectives.map((p) => {
-    const files = p.primaryFiles;
-    const settled = files.length > 0 && KIND_BY_PATH.find((c) => files.every(c.matches));
-    return { ...p, kind: settled ? settled.kind : normalizeKind(p.kind) };
-  });
-}
-
 export function postProcess(set: PerspectiveSet): PerspectiveSet {
   const merged = mergeOverlapping(set.perspectives);
-  const refined = refineKind(merged);
-  return demoteSingletons({ ...set, perspectives: refined });
+  const normalized = merged.map((p) => ({ ...p, kind: normalizeKind(p.kind) }));
+  return demoteSingletons({ ...set, perspectives: normalized });
 }
