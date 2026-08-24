@@ -1,34 +1,41 @@
 <p align="right"><strong>English</strong> / <a href="README_ja.md">日本語</a></p>
 
-<h1 align="center">🧭 semantic-diff-tracer</h1>
+<h1 align="center">🧭 sdt: semantic-diff-tracer</h1>
 
-<p align="center"><b>Story-mode PR review for VSCode and the terminal.</b></p>
+<p align="center">
+  <strong>Read a PR as a story, not as a wall of diff.</strong><br/>
+  Groups changed hunks into outcome-based perspectives and lets you step through each one — without a debugger and without a runtime.
+</p>
 
 > [!WARNING]
 > Experimental. Interfaces, commands, and prompts are still moving.
 
-semantic-diff-tracer is a VSCode extension with a companion TUI CLI that helps a human reviewer grasp a GitHub PR before reading the diff line by line. It groups changed hunks into outcome-based **perspectives**, summarises each one with a visualisation, and lets you walk the code as a **story** — Step In / Over / Out / Back — without executing anything.
+semantic-diff-tracer is a VSCode extension with a companion TUI CLI that helps a human reviewer grasp a GitHub PR before reading the diff line by line. The extension and the TUI share the same core, so the perspectives, summaries, and traces you see are identical across both surfaces.
 
 ## Why semantic-diff-tracer?
 
 - **Outcome-based perspectives** — hunks are grouped by "what became possible after this merge," not by file path or commit order
 - **Semantic trace with auto-generated mocks** — the block tree is planned up front and I/O boundaries (HTTP, filesystem, DB, clock, randomness) are stubbed automatically, so you can step through the change as a story without a debug adapter or a runtime. Rewrite any mock in natural language (`"what if the token is expired?"`) and the downstream flow re-plans.
 - **Ask about anything** — drag-select any text in the Summary or Trace tab and ask a question; the answer becomes a Q&A section pinned into the perspective
-- **Same experience in VSCode and the terminal** — the extension and the TUI CLI share the same core, so the perspectives, summaries, and traces you see are identical across both surfaces
 
 ## 🚀 Quick Start
 
-### 1. Requirements
+Common to both surfaces: Git 2.20+, a GitHub account, and credentials for the LLM backend (the only adapter that ships today is Claude, which accepts OAuth via the `claude` CLI or an `ANTHROPIC_API_KEY` / Vertex / Bedrock setup).
 
-- Node.js 20+ (runtime for the TUI; also required by the VSCode extension host)
-- VSCode 1.90+ (for the extension)
-- Git 2.20+
-- A GitHub account. In VSCode the built-in `github` auth provider handles the OAuth — no PAT required. For the TUI, export `GITHUB_TOKEN` or `GH_TOKEN`
-- Credentials for the LLM backend. The only backend that ships today is the Claude adapter, which takes OAuth via the `claude` CLI or an `ANTHROPIC_API_KEY` / Vertex / Bedrock setup
+<table>
+<tr>
+  <th align="left" width="50%">VSCode extension</th>
+  <th align="left" width="50%">TUI</th>
+</tr>
+<tr>
+  <td valign="top">
 
-### 2. Install
+**Requirements**
 
-**VSCode extension** — install from the Marketplace:
+- VSCode 1.90+
+- GitHub auth handled by the built-in `github` provider — no PAT required
+
+**Install** — from the Marketplace:
 
 ```bash
 code --install-extension amaya382.semantic-diff-tracer
@@ -36,7 +43,15 @@ code --install-extension amaya382.semantic-diff-tracer
 
 Or search for **Semantic Diff Tracer** in the Extensions view (`Ctrl/Cmd+Shift+X`).
 
-**TUI** — install via Homebrew:
+  </td>
+  <td valign="top">
+
+**Requirements**
+
+- Node.js 20+
+- `GITHUB_TOKEN` or `GH_TOKEN` exported in the shell
+
+**Install** — via Homebrew:
 
 ```bash
 brew install amaya382/tap/semantic-diff-tracer
@@ -44,7 +59,11 @@ brew install amaya382/tap/semantic-diff-tracer
 
 Provides both `semantic-diff-tracer` and its short alias `sdt`.
 
-### 3. Open a PR
+  </td>
+</tr>
+</table>
+
+### Open a PR
 
 ```
 Command Palette (Ctrl/Cmd+Shift+P)
@@ -71,7 +90,7 @@ Conversations are keyed on the PR ref and cached in `sessions.json` under the ex
 
 ### Perspectives
 
-A perspective is an *outcome*, not a file group. The extraction prompt (embedded in [`packages/core/src/prompts/perspective.ts`](packages/core/src/prompts/perspective.ts)) enforces these rules:
+A perspective is an *outcome*, not a file group. The extraction prompt enforces these rules:
 
 - Cut along axes the reviewer would actually think in (e.g. "SSO login works", "cache invalidation reworked")
 - Fold purely-mechanical changes (renames, formatting) into the perspective they serve — otherwise drop them into "Incidental changes"
@@ -86,7 +105,7 @@ Clicking a perspective opens a panel with two tabs. The **Summary** tab shows:
 - **Outcome** — one line: what became possible
 - **Watch for** — subtle invariants or contract changes worth flagging
 - **Tests** — files that verify this perspective, each a clickable `file:line` chip
-- **Visualization** — a diagram whose form matches the change: `mermaid` (sequence / flowchart / state), `call-tree`, `component-tree`, `file-tree`, `pseudocode`, or a `diff` block. Selected per perspective by the same content-shape → form mapping as the [show-me skill](https://github.com/anthropics/claude-code/blob/main/skills/show-me/SKILL.md).
+- **Visualization** — a diagram whose form matches the change: `mermaid` (sequence / flowchart / state), `call-tree`, `component-tree`, `file-tree`, `pseudocode`, or a `diff` block. Selected per perspective based on the shape of the change.
 - **Q&A** — drag-select any text, ask a question; the answer is pinned as a section. Ask a follow-up on any section; delete when it stops being useful.
 
 ### Trace tab
@@ -233,4 +252,5 @@ The extension searches `PATH` and standard Claude Code install locations. If you
 
 ## 🙏 Acknowledgements
 
-- [show-me skill](https://github.com/anthropics/claude-code/blob/main/skills/show-me/SKILL.md) — the content-shape → visualization mapping the Summary tab reuses (mermaid / call-tree / component-tree / file-tree / pseudocode / diff)
+- [show-me skill](https://github.com/anthropics/claude-code/blob/main/skills/show-me/SKILL.md) — the visualization vocabulary the Summary tab draws from (mermaid / call-tree / component-tree / file-tree / pseudocode / diff)
+
