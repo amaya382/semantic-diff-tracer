@@ -1,0 +1,223 @@
+{
+  "name": "semantic-diff-tracer",
+  "displayName": "Semantic Diff Tracer",
+  "description": "Grasp a GitHub PR fast: outcome-based perspectives, story-mode trace, drag-select ask.",
+  "version": "0.0.1",
+  "publisher": "amaya382",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "keywords": [
+    "pr",
+    "pull-request",
+    "code-review",
+    "github",
+    "llm",
+    "claude",
+    "diff",
+    "story-mode"
+  ],
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amaya382/semantic-diff-tracer.git",
+    "directory": "apps/vscode"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "sdt.pickPr",
+        "title": "Semantic Diff Tracer: Open PR (URL / #N / branch)",
+        "icon": "$(git-pull-request-go-to-changes)"
+      },
+      {
+        "command": "sdt.reviewCurrentBranch",
+        "title": "Semantic Diff Tracer: Review Current Branch",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "sdt.refresh",
+        "title": "Semantic Diff Tracer: Refresh Perspectives",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "sdt.openSummary",
+        "title": "Semantic Diff Tracer: Open Summary",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "sdt.openTrace",
+        "title": "Semantic Diff Tracer: Open Trace",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "sdt.switchWorktree",
+        "title": "Semantic Diff Tracer: Switch Baretree Worktree",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "sdt.cleanupCheckouts",
+        "title": "Semantic Diff Tracer: Cleanup PR Checkouts",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "sdt.showLog",
+        "title": "Semantic Diff Tracer: Show Log",
+        "icon": "$(output)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sdt",
+          "title": "Semantic Diff Tracer",
+          "icon": "media/activity-bar.svg"
+        }
+      ]
+    },
+    "views": {
+      "sdt": [
+        {
+          "type": "webview",
+          "id": "sdt.side",
+          "name": "Perspectives",
+          "contextualTitle": "Semantic Diff Tracer"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "sdt.pickPr",
+          "when": "view == sdt.side",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sdt.reviewCurrentBranch",
+          "when": "view == sdt.side",
+          "group": "navigation@2"
+        },
+        {
+          "command": "sdt.refresh",
+          "when": "view == sdt.side",
+          "group": "navigation@3"
+        },
+        {
+          "command": "sdt.switchWorktree",
+          "when": "view == sdt.side",
+          "group": "overflow@1"
+        },
+        {
+          "command": "sdt.cleanupCheckouts",
+          "when": "view == sdt.side",
+          "group": "overflow@2"
+        },
+        {
+          "command": "sdt.showLog",
+          "when": "view == sdt.side",
+          "group": "overflow@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Semantic Diff Tracer",
+      "properties": {
+        "sdt.defaultBaseBranch": {
+          "type": "string",
+          "default": "main",
+          "description": "Base branch used when reviewing the current local branch."
+        },
+        "sdt.language": {
+          "type": "string",
+          "default": "en",
+          "description": "Free-form language hint appended to every LLM prompt (e.g. \"en\", \"ja\", \"zh\", \"Español\"). Applies to summaries, flow narratives, Q&A answers."
+        },
+        "sdt.flowMaxTurns": {
+          "type": "number",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Cap on agent turns for Flow planning and refinement. Higher values let the model read more source files before it commits to a plan; lower values keep the initial wait short."
+        },
+        "sdt.claudeExecutable": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the claude CLI. Leave empty to search PATH and the standard Claude Code install locations."
+        },
+        "sdt.environmentVariables": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "value"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Environment variable name."
+              },
+              "value": {
+                "type": "string",
+                "description": "Environment variable value."
+              }
+            },
+            "additionalProperties": false
+          },
+          "markdownDescription": "Extra environment variables passed to the spawned Claude CLI, merged over the extension host's own env (settings win on conflict). Each entry is `{ \"name\": \"VAR\", \"value\": \"...\" }`. OAuth logins need nothing here — `~/.claude/.credentials.json` is loaded regardless. Use it for Vertex/Bedrock (`CLAUDE_CODE_USE_VERTEX`, `ANTHROPIC_VERTEX_PROJECT_ID`, `AWS_*`) or for pinning `ANTHROPIC_API_KEY` at the extension level. `~/.claude/settings.json` is never loaded, so `apiKeyHelper` and its `env` block do not take effect — put the values here directly."
+        },
+        "sdt.claudeModel": {
+          "type": "string",
+          "enum": [
+            "default",
+            "sonnet",
+            "opus",
+            "haiku",
+            "inherit"
+          ],
+          "default": "sonnet",
+          "markdownDescription": "Model the Claude Agent SDK uses. `default` leaves the SDK/CLI default in place; `inherit` uses whatever the ambient claude CLI is configured for."
+        },
+        "sdt.claudeEffort": {
+          "type": "string",
+          "enum": [
+            "default",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ],
+          "default": "low",
+          "markdownDescription": "Thinking effort mapped to `maxThinkingTokens`. `default` = SDK default; `low` = 1024, `medium` = 4096, `high` = 16384, `max` = 32768."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -b && node esbuild.mjs",
+    "watch": "tsc -b -w",
+    "test": "vitest run --passWithNoTests",
+    "package": "vsce package --no-dependencies",
+    "publish": "npm run build && vsce publish --no-dependencies"
+  },
+  "dependencies": {
+    "@semantic-diff-tracer/core": "*",
+    "@semantic-diff-tracer/diff-git": "*",
+    "@semantic-diff-tracer/github-octokit": "*",
+    "@semantic-diff-tracer/llm-claude": "*",
+    "@semantic-diff-tracer/session-store-fs": "*",
+    "@semantic-diff-tracer/testing": "*",
+    "@vscode/codicons": "^0.0.46-24",
+    "highlight.js": "^11.12.0",
+    "mermaid": "^11.17.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.24.0"
+  }
+}

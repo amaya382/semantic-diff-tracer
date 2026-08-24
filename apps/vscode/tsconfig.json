@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./out",
+    "composite": true,
+    "types": ["node", "vscode"],
+    "resolveJsonModule": true
+  },
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/diff-git" },
+    { "path": "../../packages/github-octokit" },
+    { "path": "../../packages/llm-claude" },
+    { "path": "../../packages/session-store-fs" },
+    { "path": "../../packages/testing" }
+  ],
+  "include": ["src/**/*"],
+  "exclude": ["out", "dist", "node_modules", "src/webview-ui/**", "**/*.test.ts"]
+}

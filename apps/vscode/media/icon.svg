@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5B7CFA"/>
+      <stop offset="100%" stop-color="#7A5AF8"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#E6ECFF" stop-opacity="0.85"/>
+    </linearGradient>
+  </defs>
+
+  <!-- rounded square background -->
+  <rect x="8" y="8" width="240" height="240" rx="48" ry="48" fill="url(#bg)"/>
+
+  <!-- outer compass ring -->
+  <circle cx="128" cy="128" r="92" fill="none" stroke="url(#ring)" stroke-width="6" opacity="0.9"/>
+  <circle cx="128" cy="128" r="78" fill="#0F172A" opacity="0.25"/>
+
+  <!-- cardinal tick marks -->
+  <g stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity="0.85">
+    <line x1="128" y1="30"  x2="128" y2="46"/>
+    <line x1="128" y1="210" x2="128" y2="226"/>
+    <line x1="30"  y1="128" x2="46"  y2="128"/>
+    <line x1="210" y1="128" x2="226" y2="128"/>
+  </g>
+
+  <!-- diff needles: two arrows diverging from center (green = add, red-ish = remove) -->
+  <!-- add needle (up-right, green) -->
+  <g transform="translate(128 128) rotate(-35)">
+    <polygon points="0,-6 88,-6 88,-14 108,0 88,14 88,6 0,6" fill="#22C55E"/>
+  </g>
+  <!-- remove needle (down-left, coral) -->
+  <g transform="translate(128 128) rotate(145)">
+    <polygon points="0,-6 88,-6 88,-14 108,0 88,14 88,6 0,6" fill="#F97066"/>
+  </g>
+
+  <!-- center hub -->
+  <circle cx="128" cy="128" r="14" fill="#0F172A"/>
+  <circle cx="128" cy="128" r="6"  fill="#FFFFFF"/>
+</svg>

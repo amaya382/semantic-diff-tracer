@@ -1,0 +1,13 @@
+.vscode/**
+src/**
+out/**
+node_modules/**
+esbuild.mjs
+tsconfig.json
+tsconfig.tsbuildinfo
+**/tsconfig.tsbuildinfo
+**/*.vsix
+**/*.map
+.gitignore
+media/*.svg
+!media/activity-bar.svg

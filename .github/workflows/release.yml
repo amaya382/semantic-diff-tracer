@@ -1,0 +1,201 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (e.g. 0.1.0). Only used when triggered manually."
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build TUI bundle and VSCode vsix
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      tarball_name: ${{ steps.meta.outputs.tarball_name }}
+      tarball_url: ${{ steps.meta.outputs.tarball_url }}
+      vsix_name: ${{ steps.meta.outputs.vsix_name }}
+      sha256: ${{ steps.pack.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Determine version
+        id: meta
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            version="${{ github.event.inputs.version }}"
+            tag="v${version}"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+            version="${tag#v}"
+          fi
+          tarball_name="semantic-diff-tracer-tui-${version}.tar.gz"
+          vsix_name="semantic-diff-tracer-${version}.vsix"
+          tarball_url="https://github.com/${{ github.repository }}/releases/download/${tag}/${tarball_name}"
+          {
+            echo "tag=${tag}"
+            echo "version=${version}"
+            echo "tarball_name=${tarball_name}"
+            echo "vsix_name=${vsix_name}"
+            echo "tarball_url=${tarball_url}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build all workspaces
+        run: npm run build
+
+      - name: Bundle TUI
+        run: npm run bundle:tui
+
+      - name: Package VSCode extension
+        run: npm run package:vscode
+
+      - name: Stage TUI tarball layout
+        run: |
+          version="${{ steps.meta.outputs.version }}"
+          stage="stage/semantic-diff-tracer-${version}"
+          mkdir -p "${stage}"
+          cp apps/tui/dist-bundle/semantic-diff-tracer.mjs "${stage}/"
+          cp LICENSE README.md README_ja.md "${stage}/"
+
+      - name: Create TUI tarball and record sha256
+        id: pack
+        run: |
+          version="${{ steps.meta.outputs.version }}"
+          tarball="${{ steps.meta.outputs.tarball_name }}"
+          tar -czf "${tarball}" -C stage "semantic-diff-tracer-${version}"
+          sha256sum "${tarball}"
+          echo "sha256=$(sha256sum "${tarball}" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Rename VSIX to canonical name
+        run: |
+          version="${{ steps.meta.outputs.version }}"
+          # vsce output is semantic-diff-tracer-<version>.vsix already, but be
+          # explicit so a future rename in package:vscode doesn't break upload.
+          src="$(ls apps/vscode/semantic-diff-tracer-*.vsix)"
+          mv "${src}" "${{ steps.meta.outputs.vsix_name }}"
+
+      - name: Publish GitHub Release with artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ steps.meta.outputs.tag }}"
+          tarball="${{ steps.meta.outputs.tarball_name }}"
+          vsix="${{ steps.meta.outputs.vsix_name }}"
+          if ! gh release view "${tag}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release create "${tag}" \
+              --repo "${{ github.repository }}" \
+              --title "${tag}" \
+              --notes "Automated release. TUI tarball for Homebrew and VSCode extension .vsix are attached." \
+              --draft=false \
+              --prerelease=false
+          fi
+          gh release upload "${tag}" "${tarball}" "${vsix}" --repo "${{ github.repository }}" --clobber
+
+      - name: Upload VSIX as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: ${{ steps.meta.outputs.vsix_name }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-vscode:
+    name: Publish to VSCode Marketplace
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce@^3.2.1
+
+      - name: Publish
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          vsix="${{ needs.build.outputs.vsix_name }}"
+          vsce publish --no-dependencies --packagePath "${vsix}"
+
+  update-tap:
+    name: Update Homebrew tap
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: amaya382/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          path: tap
+
+      - name: Rewrite formula
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          TARBALL_URL: ${{ needs.build.outputs.tarball_url }}
+          SHA256: ${{ needs.build.outputs.sha256 }}
+        run: |
+          mkdir -p tap/Formula
+          cat > tap/Formula/semantic-diff-tracer.rb <<RUBY
+          class SemanticDiffTracer < Formula
+            desc "Grasp any GitHub PR fast: outcome-based perspectives with an LLM-powered story-mode debugger"
+            homepage "https://github.com/amaya382/semantic-diff-tracer"
+            url "${TARBALL_URL}"
+            sha256 "${SHA256}"
+            license "MIT"
+            version "${VERSION}"
+
+            depends_on "node"
+
+            def install
+              libexec.install "semantic-diff-tracer.mjs"
+              (bin/"semantic-diff-tracer").write <<~EOS
+                #!/bin/bash
+                exec "\$(brew --prefix node)/bin/node" "#{libexec}/semantic-diff-tracer.mjs" "\$@"
+              EOS
+              chmod 0755, bin/"semantic-diff-tracer"
+              bin.install_symlink "semantic-diff-tracer" => "sdt"
+            end
+
+            test do
+              assert_match "semantic-diff-tracer TUI", shell_output("#{bin}/semantic-diff-tracer --help")
+            end
+          end
+          RUBY
+
+      - name: Commit & push
+        working-directory: tap
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/semantic-diff-tracer.rb
+          if git diff --cached --quiet; then
+            echo "No formula changes"
+            exit 0
+          fi
+          git commit -m "semantic-diff-tracer ${VERSION}"
+          git push origin HEAD

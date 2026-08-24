@@ -1,0 +1,91 @@
+{
+  "version": "0.2.0",
+  "inputs": [
+    {
+      "id": "targetFolder",
+      "type": "promptString",
+      "description": "Folder for the Extension Host to open (absolute path). Leave blank to launch without opening a folder.",
+      "default": "${userHome}/"
+    }
+  ],
+  "configurations": [
+    {
+      "name": "Run Extension (pick a folder)",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/apps/vscode",
+        "--disable-extensions",
+        "${input:targetFolder}"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/apps/vscode/dist/**/*.{js,cjs,mjs}"
+      ],
+      "sourceMaps": true,
+      "preLaunchTask": "build vscode extension",
+      "env": {
+        "SDT_CLAUDE_MODEL": "sonnet",
+        "SDT_CLAUDE_EFFORT": "low"
+      }
+    },
+    {
+      "name": "Run Extension (no folder)",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/apps/vscode",
+        "--disable-extensions"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/apps/vscode/dist/**/*.{js,cjs,mjs}"
+      ],
+      "sourceMaps": true,
+      "preLaunchTask": "build vscode extension",
+      "env": {
+        "SDT_CLAUDE_MODEL": "sonnet",
+        "SDT_CLAUDE_EFFORT": "low"
+      }
+    },
+    {
+      "name": "Run Extension (open this repo's root)",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/apps/vscode",
+        "--disable-extensions",
+        "${workspaceFolder}"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/apps/vscode/dist/**/*.{js,cjs,mjs}"
+      ],
+      "sourceMaps": true,
+      "preLaunchTask": "build vscode extension",
+      "env": {
+        "SDT_CLAUDE_MODEL": "sonnet",
+        "SDT_CLAUDE_EFFORT": "low"
+      }
+    },
+    {
+      "name": "Run Extension (E2E stub fixtures)",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/apps/vscode",
+        "--disable-extensions",
+        "${workspaceFolder}/e2e/vscode/fixtures/workspace"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/apps/vscode/dist/**/*.{js,cjs,mjs}"
+      ],
+      "sourceMaps": true,
+      "preLaunchTask": "build vscode extension",
+      "env": {
+        "SDT_E2E_STUB": "${workspaceFolder}/e2e/vscode/fixtures/stub"
+      }
+    }
+  ]
+}

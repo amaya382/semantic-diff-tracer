@@ -1,0 +1,43 @@
+{
+  "name": "semantic-diff-tracer",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Grasp any GitHub PR fast: outcome-based perspectives with an LLM-powered story-mode debugger.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amaya382/semantic-diff-tracer.git"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "e2e/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "vitest run",
+    "test:e2e": "npm run test:e2e:vscode && npm run test:e2e:tui",
+    "test:e2e:vscode": "npm run build && npm run test -w e2e/vscode",
+    "test:e2e:tui": "npm run build && npm run test -w e2e/tui",
+    "lint": "npm run lint --workspaces --if-present",
+    "check:boundaries": "node scripts/check-import-boundaries.mjs",
+    "package:vscode": "npm run package -w apps/vscode",
+    "package:tui": "npm run build -w apps/tui",
+    "bundle:tui": "npm run bundle -w apps/tui",
+    "publish:vscode": "npm run publish -w apps/vscode"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@vscode/vsce": "^3.2.1",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "esbuild@0.24.2": true,
+    "esbuild@0.21.5": true,
+    "keytar@7.9.0": true,
+    "@vscode/vsce-sign@2.1.0": true
+  }
+}

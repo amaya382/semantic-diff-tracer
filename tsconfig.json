@@ -1,0 +1,13 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/llm-claude" },
+    { "path": "packages/diff-git" },
+    { "path": "packages/github-octokit" },
+    { "path": "packages/session-store-fs" },
+    { "path": "packages/testing" },
+    { "path": "apps/vscode" },
+    { "path": "apps/tui" }
+  ]
+}
