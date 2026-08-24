@@ -3,11 +3,11 @@ name: Release
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "[0-9]+.[0-9]+.[0-9]+"
   workflow_dispatch:
     inputs:
       version:
-        description: "Version (e.g. 0.1.0). Only used when triggered manually."
+        description: "Version (X.Y.Z, e.g. 0.1.0). No 'v' prefix."
         required: true
         type: string
 
@@ -20,7 +20,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.meta.outputs.version }}
-      tag: ${{ steps.meta.outputs.tag }}
       tarball_name: ${{ steps.meta.outputs.tarball_name }}
       tarball_url: ${{ steps.meta.outputs.tarball_url }}
       vsix_name: ${{ steps.meta.outputs.vsix_name }}
@@ -41,16 +40,13 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             version="${{ github.event.inputs.version }}"
-            tag="v${version}"
           else
-            tag="${GITHUB_REF#refs/tags/}"
-            version="${tag#v}"
+            version="${GITHUB_REF#refs/tags/}"
           fi
           tarball_name="semantic-diff-tracer-tui-${version}.tar.gz"
           vsix_name="semantic-diff-tracer-${version}.vsix"
-          tarball_url="https://github.com/${{ github.repository }}/releases/download/${tag}/${tarball_name}"
+          tarball_url="https://github.com/${{ github.repository }}/releases/download/${version}/${tarball_name}"
           {
-            echo "tag=${tag}"
             echo "version=${version}"
             echo "tarball_name=${tarball_name}"
             echo "vsix_name=${vsix_name}"
@@ -95,18 +91,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="${{ steps.meta.outputs.tag }}"
+          version="${{ steps.meta.outputs.version }}"
           tarball="${{ steps.meta.outputs.tarball_name }}"
           vsix="${{ steps.meta.outputs.vsix_name }}"
-          if ! gh release view "${tag}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release create "${tag}" \
+          if ! gh release view "${version}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release create "${version}" \
               --repo "${{ github.repository }}" \
-              --title "${tag}" \
+              --title "${version}" \
               --notes "Automated release. TUI tarball for Homebrew and VSCode extension .vsix are attached." \
               --draft=false \
               --prerelease=false
           fi
-          gh release upload "${tag}" "${tarball}" "${vsix}" --repo "${{ github.repository }}" --clobber
+          gh release upload "${version}" "${tarball}" "${vsix}" --repo "${{ github.repository }}" --clobber
 
       - name: Upload VSIX as workflow artifact
         uses: actions/upload-artifact@v4
