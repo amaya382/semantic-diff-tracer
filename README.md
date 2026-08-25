@@ -9,7 +9,7 @@
 
 > [!WARNING]
 > Experimental. Interfaces, commands, and prompts are still moving.
-> See [TODO.md](TODO.md) for known follow-ups and roadmap.
+> See the [issues](https://github.com/amaya382/semantic-diff-tracer/issues) for known follow-ups and roadmap.
 
 semantic-diff-tracer is a VSCode extension with a companion TUI CLI that helps a human reviewer grasp a GitHub PR before reading the diff line by line. The extension and the TUI share the same core, so the perspectives, summaries, and traces you see are identical across both surfaces.
 
