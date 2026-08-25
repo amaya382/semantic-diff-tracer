@@ -1,5 +1,12 @@
 import { Octokit } from '@octokit/rest';
-import type { PrPort, PrInput, PrRef, PrMeta, PrListEntry } from '@semantic-diff-tracer/core';
+import type {
+  PrPort,
+  PrInput,
+  PrRef,
+  PrMeta,
+  PrListEntry,
+  PrListOptions,
+} from '@semantic-diff-tracer/core';
 import { parseGithubPrUrl, parseOwnerRepoNumber } from './parse-input.js';
 
 export interface OctokitAdapterOptions {
@@ -48,11 +55,11 @@ export class OctokitPrAdapter implements PrPort {
     };
   }
 
-  async listOpen(owner: string, repo: string): Promise<PrListEntry[]> {
+  async list(owner: string, repo: string, options?: PrListOptions): Promise<PrListEntry[]> {
     const { data } = await this.octokit.pulls.list({
       owner,
       repo,
-      state: 'open',
+      state: options?.state ?? 'open',
       sort: 'updated',
       direction: 'desc',
       per_page: 50,
@@ -65,6 +72,7 @@ export class OctokitPrAdapter implements PrPort {
       headRef: p.head.ref,
       baseRef: p.base.ref,
       isDraft: p.draft === true,
+      state: p.state === 'closed' ? (p.merged_at ? 'merged' : 'closed') : 'open',
     }));
   }
 

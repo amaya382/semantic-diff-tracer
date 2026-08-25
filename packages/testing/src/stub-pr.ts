@@ -1,9 +1,16 @@
-import type { PrInput, PrListEntry, PrMeta, PrPort, PrRef } from '@semantic-diff-tracer/core';
+import type {
+  PrInput,
+  PrListEntry,
+  PrListOptions,
+  PrMeta,
+  PrPort,
+  PrRef,
+} from '@semantic-diff-tracer/core';
 
 export interface StubPrOptions {
   ref: PrRef;
   meta: PrMeta;
-  openList?: PrListEntry[];
+  list?: PrListEntry[];
 }
 
 export class StubPrPort implements PrPort {
@@ -17,7 +24,11 @@ export class StubPrPort implements PrPort {
     return this.options.meta;
   }
 
-  async listOpen(_owner: string, _repo: string): Promise<PrListEntry[]> {
-    return this.options.openList ?? [];
+  async list(_owner: string, _repo: string, options?: PrListOptions): Promise<PrListEntry[]> {
+    const all = this.options.list ?? [];
+    if ((options?.state ?? 'open') === 'open') {
+      return all.filter((p) => p.state === 'open');
+    }
+    return all;
   }
 }

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { runGit } from '@semantic-diff-tracer/diff-git';
-import type { PrPort, PrRef } from '@semantic-diff-tracer/core';
+import type { PrListEntryState, PrPort, PrRef } from '@semantic-diff-tracer/core';
 import {
   parseGithubPrUrl,
   parseNumberOnly,
@@ -36,14 +36,16 @@ export async function pickPr(deps: PickPrDeps): Promise<PrRef | undefined> {
   qp.matchOnDescription = true;
   qp.matchOnDetail = true;
 
-  // Load the open-PR list up front. If it fails (no token yet, no origin),
-  // fall back to free-form only.
-  let openItems: PrQuickPickItem[] = [];
+  // Load the PR list up front (open PRs first, then closed/merged). If it
+  // fails (no token yet, no origin), fall back to free-form only.
+  let prItems: PrQuickPickItem[] = [];
   if (defaultRepo) {
     try {
-      const list = await deps.pr.listOpen(defaultRepo.owner, defaultRepo.repo);
-      openItems = list.map((p) => ({
-        label: `#${p.number} · ${p.title}`,
+      const list = await deps.pr.list(defaultRepo.owner, defaultRepo.repo, { state: 'all' });
+      const open = list.filter((p) => p.state === 'open');
+      const closed = list.filter((p) => p.state !== 'open');
+      prItems = [...open, ...closed].map((p) => ({
+        label: `${stateIcon(p.state)}#${p.number} · ${p.title}`,
         description: p.isDraft ? `${p.author} · draft` : p.author,
         detail: `${p.headRef} → ${p.baseRef}`,
         alwaysShow: false,
@@ -53,12 +55,12 @@ export async function pickPr(deps: PickPrDeps): Promise<PrRef | undefined> {
       // ignore — the user can still type a URL
     }
   }
-  qp.items = openItems;
+  qp.items = prItems;
 
   const dispose = qp.onDidChangeValue((value) => {
     const trimmed = value.trim();
     if (!trimmed) {
-      qp.items = openItems;
+      qp.items = prItems;
       return;
     }
     const custom: PrQuickPickItem = {
@@ -67,7 +69,7 @@ export async function pickPr(deps: PickPrDeps): Promise<PrRef | undefined> {
       alwaysShow: true,
       freeform: trimmed,
     };
-    qp.items = [custom, ...openItems];
+    qp.items = [custom, ...prItems];
   });
 
   const chosen = await new Promise<PrQuickPickItem | undefined>((resolve) => {
@@ -85,6 +87,17 @@ export async function pickPr(deps: PickPrDeps): Promise<PrRef | undefined> {
 
   const inputValue = chosen.freeform ?? qp.value.trim();
   return resolveInput(inputValue, deps.pr, defaultRepo);
+}
+
+function stateIcon(state: PrListEntryState): string {
+  switch (state) {
+    case 'merged':
+      return '$(check) ';
+    case 'closed':
+      return '$(circle-slash) ';
+    case 'open':
+      return '';
+  }
 }
 
 function describeInput(
