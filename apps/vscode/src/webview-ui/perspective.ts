@@ -709,8 +709,9 @@ function buildTraceFlowOutline(flow: Flow, cursor: BlockPath): HTMLElement {
 }
 
 /**
- * Variables at the cursor, diffed against the previous block in DFS order so
- * the reader can see a value enter the trace and change as it propagates.
+ * Variables at the cursor. A value is flagged "changed" when the same name was
+ * visible in the previous block (DFS order) with a different value — a
+ * propagation cue for in-scope mutation.
  */
 function buildTraceVariables(vars: Variable[], previous: Variable[]): HTMLElement {
   const section = el('section', {
@@ -727,16 +728,8 @@ function buildTraceVariables(vars: Variable[], previous: Variable[]): HTMLElemen
   const list = el('ul', { class: 'var-list' });
   for (const v of vars) {
     const priorValue = before.get(v.name);
-    // First block of the flow has nothing to compare against, so nothing is
-    // "new" there — every value is simply the starting state.
-    const status =
-      previous.length === 0
-        ? undefined
-        : priorValue === undefined
-          ? 'new'
-          : priorValue !== v.value
-            ? 'changed'
-            : undefined;
+    const changed =
+      previous.length > 0 && priorValue !== undefined && priorValue !== v.value;
     const head = el('div', {
       class: 'var-head',
       children: [
@@ -745,9 +738,9 @@ function buildTraceVariables(vars: Variable[], previous: Variable[]): HTMLElemen
         el('code', { class: 'var-value', text: v.value }),
       ],
     });
-    if (status) head.append(el('span', { class: `var-flag ${status}`, text: status }));
+    if (changed) head.append(el('span', { class: 'var-flag changed', text: 'changed' }));
     const li = el('li', { class: 'var-row', children: [head] });
-    if (status === 'changed' && priorValue !== undefined) {
+    if (changed && priorValue !== undefined) {
       li.append(
         el('div', {
           class: 'var-was',
@@ -2095,9 +2088,8 @@ function installStyles(): void {
     .var-name { color: var(--vscode-symbolIcon-variableForeground, var(--vscode-foreground)); font-weight: 600; overflow-wrap: anywhere; }
     .var-eq { opacity: 0.5; }
     .var-value { color: var(--vscode-charts-blue, var(--vscode-foreground)); overflow-wrap: anywhere; }
-    /* new / changed relative to the previous block — the propagation cue. */
+    /* Value changed within the same visible name across the previous block. */
     .var-flag { margin-left: auto; padding: 0.02rem 0.35rem; border-radius: 999px; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
-    .var-flag.new { background: var(--vscode-gitDecoration-addedResourceForeground, #4caf50); color: var(--vscode-editor-background); }
     .var-flag.changed { background: var(--vscode-gitDecoration-modifiedResourceForeground, #d19a66); color: var(--vscode-editor-background); }
     .var-was { font-size: 0.7rem; opacity: 0.6; padding-left: 0.4rem; overflow-wrap: anywhere; }
     .var-old-value { text-decoration: line-through; }
