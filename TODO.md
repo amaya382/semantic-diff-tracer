@@ -2,6 +2,25 @@
 
 Follow-ups not tackled in the initial main rebuild. Update as work lands.
 
+## Core
+
+- **planFlow LLM discipline.** Prompt occasionally returns >12 blocks; the
+  plan says to fall back to a two-shot refold, but the current implementation
+  only runs the single-shot path. Add the fold pass.
+- **Speed up LLM-driven stages.** `planFlow` currently takes over a minute in
+  many cases; the same latency shows up on other LLM-driven stages
+  (perspective, summary, refineFlow, askQa). Investigate parallelism across
+  independent blocks, prompt-size reduction, streaming, and cheaper models for
+  intermediate stages so the wall time comes down to something interactive.
+- **Stabilise Summary and Trace output.** For large PRs the resulting Summary
+  and Trace content still varies noticeably between runs, and it is unclear
+  whether the current prompts hold up on high-churn diffs. Design the prompts
+  and the LLM call graph so the output stays coherent as diff size grows, and
+  add regression fixtures that exercise several sizes of PR.
+- **PR review comments.** Not implemented in main. If reintroduced, wire
+  into Summary Q&A answers as an action button ("Post as PR comment") rather
+  than the ad-hoc gutter command from `main`.
+
 ## VSCode extension
 
 - **Editor tab integration.** Currently the Trace tab renders code inside its own
@@ -35,15 +54,6 @@ Follow-ups not tackled in the initial main rebuild. Update as work lands.
 - **Ask-about-selection parity.** TUI Summary supports `a`/`f` but there is
   no way to pick a slice of summary text as `contextRef`; add a `y` mode
   that opens `$EDITOR` to compose the question with context.
-
-## Core
-
-- **planFlow LLM discipline.** Prompt occasionally returns >12 blocks; the
-  plan says to fall back to a two-shot refold, but the current implementation
-  only runs the single-shot path. Add the fold pass.
-- **PR review comments.** Not implemented in main. If reintroduced, wire
-  into Summary Q&A answers as an action button ("Post as PR comment") rather
-  than the ad-hoc gutter command from `main`.
 
 ## Testing
 

@@ -9,6 +9,7 @@
 
 > [!WARNING]
 > 実験的な実装です。インターフェース、コマンド、プロンプトはまだ流動的です。
+> 既知の宿題やロードマップは [TODO.md](TODO.md) を参照してください。
 
 semantic-diff-tracer は、レビュアーが差分を 1 行ずつ読み始める前に GitHub PR の全体像を掴むための VSCode extension、および同じコアを共有する TUI CLI です。extension と TUI は同じ core を共有するので、表示される観点やサマリ、トレースは両方の環境で同一になります。
 
