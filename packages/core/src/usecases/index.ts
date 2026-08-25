@@ -2,6 +2,7 @@ export * from './json-parse.js';
 export * from './hunk-manifest.js';
 export * from './post-process.js';
 export * from './extract-perspectives.js';
+export * from './perspective-code-context.js';
 export * from './summarize.js';
 export * from './plan-flow.js';
 export * from './refine-flow.js';

@@ -10,11 +10,10 @@ import type { Flow, Mock } from '../domain/flow.js';
 import { REFINE_MOCK_SYSTEM_PROMPT, buildRefineMockUserMessage } from '../prompts/refine-mock.js';
 import { parseJsonStrict } from './json-parse.js';
 import {
-  assignRoles,
+  applyRefinedFlowPatch,
   collectMocks,
-  dedupeAdjacentBlocks,
-  hydrateFlowCode,
-  normalizeFromRawBlocks,
+  countBlocks,
+  parseRefinedFlowPatch,
 } from './plan-flow-internals.js';
 
 export interface RefineFlowDeps {
@@ -37,8 +36,10 @@ export interface RefineFlowFromMockArgs {
 
 /**
  * Re-plan the flow tree under a mock change. Resumes the flow session so the
- * LLM keeps the original context and only touches downstream blocks. Returns
- * the whole new flow.
+ * LLM keeps the preloaded code context from `planFlow` and only touches
+ * downstream blocks. The LLM returns a `RefinedFlowPatch` (see
+ * `plan-flow-internals.ts`) that we apply to the current tree; the returned
+ * `Flow` still carries the full tree so callers can swap it wholesale.
  */
 export async function refineFlowFromMock(
   deps: RefineFlowDeps,
@@ -61,6 +62,7 @@ export async function refineFlowFromMock(
     conversation.ask({
       system: REFINE_MOCK_SYSTEM_PROMPT,
       user,
+      tools: ['Grep'],
       ...(deps.language ? { language: deps.language } : {}),
       ...(deps.maxTurns ? { maxTurns: deps.maxTurns } : {}),
     }),
@@ -70,14 +72,25 @@ export async function refineFlowFromMock(
     conversation.id,
   );
 
-  const raw = parseJsonStrict<{ blocks?: unknown }>(text);
-  const rawBlocks = Array.isArray(raw.blocks) ? raw.blocks : [];
-  const normalised = normalizeFromRawBlocks(rawBlocks, args.flow.perspectiveId);
-  await hydrateFlowCode(normalised, args.ref, deps.diff);
+  const rawPatch = parseJsonStrict<unknown>(text);
+  const patch = parseRefinedFlowPatch(rawPatch, args.flow.perspectiveId);
   const unified = await deps.diff.getDiff(args.ref);
-  assignRoles(normalised, unified);
-  const blocks = dedupeAdjacentBlocks(normalised);
+  const blocks = await applyRefinedFlowPatch(
+    args.flow.blocks,
+    patch,
+    args.ref,
+    deps.diff,
+    unified,
+  );
   const allMocks = collectMocks(blocks);
+  log.info('flow', 'refineFlowFromMock ready', {
+    perspectiveId: args.flow.perspectiveId,
+    replacements: patch.replacements.length,
+    removals: patch.removals.length,
+    insertions: patch.insertions.length,
+    totalBlocks: countBlocks(blocks),
+    mocks: allMocks.length,
+  });
   return {
     flowId: deps.newFlowId?.() ?? `${args.flow.flowId}+refined-${Date.now()}`,
     perspectiveId: args.flow.perspectiveId,

@@ -3,16 +3,20 @@ import type { SessionStorePort } from '../ports/session-store.js';
 import { sessionKey } from '../ports/session-store.js';
 import type { LoggerPort } from '../ports/logger.js';
 import { nullLogger } from '../ports/logger.js';
+import type { DiffPort } from '../ports/diff.js';
 import type { PrRef } from '../domain/pr-ref.js';
 import { prRefKey } from '../domain/pr-ref.js';
+import type { UnifiedDiff } from '../domain/diff.js';
 import type { PerspectiveDraft } from '../domain/perspective.js';
 import type { PerspectiveSummary, SummaryPayload } from '../domain/summary.js';
 import { sanitizeSummaryVisuals } from '../domain/summary.js';
 import { SUMMARY_SYSTEM_PROMPT, buildSummaryUserMessage } from '../prompts/summary.js';
 import { parseJsonStrict } from './json-parse.js';
+import { buildPerspectiveCodeContext } from './perspective-code-context.js';
 
 export interface SummarizeDeps {
   llm: LlmProvider;
+  diff: DiffPort;
   sessionStore: SessionStorePort;
   logger?: LoggerPort;
   language?: string;
@@ -21,12 +25,20 @@ export interface SummarizeDeps {
 export interface SummarizeArgs {
   ref: PrRef;
   perspective: PerspectiveDraft;
+  /** Pre-fetched diff — pass through when the caller already has one to avoid a redundant getDiff. */
+  diff?: UnifiedDiff;
 }
 
 /**
  * Produces the perspective summary (Outcome / Tests / Watch-for). The
  * conversation is stored as `summary:{pid}` so Q&A sections can fork
  * from it without touching the perspective or flow conversations.
+ *
+ * Uses a fresh conversation (or resumes the cached summary session) rather
+ * than forking the perspective/base session — carrying that history bloated
+ * cacheRead without cutting Read-tool turns. Instead, we preload the
+ * primary-file code into the user message and restrict tools to Grep so the
+ * model answers in one shot.
  */
 export async function summarize(
   deps: SummarizeDeps,
@@ -39,7 +51,21 @@ export async function summarize(
     perspectiveId: args.perspective.id,
   });
   const cachedSummary = await deps.sessionStore.get(summaryKey);
-  const user = buildSummaryUserMessage(args.perspective);
+
+  const diff = args.diff ?? (await deps.diff.getDiff(args.ref));
+  const codeContext = await buildPerspectiveCodeContext(
+    args.ref,
+    args.perspective,
+    diff,
+    deps.diff,
+  );
+  log.info('summary', 'code context ready', {
+    perspectiveId: args.perspective.id,
+    fullFiles: codeContext.fullFiles.length,
+    slicedFiles: codeContext.slicedFiles.length,
+    bytes: codeContext.bytes,
+  });
+  const user = buildSummaryUserMessage(args.perspective, codeContext.text);
 
   let conversation: Conversation;
   let label: string;
@@ -51,27 +77,18 @@ export async function summarize(
     conversation = deps.llm.resumeConversation(cachedSummary);
     label = 'resume summary';
   } else {
-    const baseSession = await deps.sessionStore.get(sessionKey(key, { kind: 'base' }));
-    if (baseSession) {
-      log.info('summary', 'forking base for perspective summary', {
-        perspectiveId: args.perspective.id,
-        baseSession,
-      });
-      conversation = deps.llm.resumeConversation(baseSession).fork();
-      label = 'fork base';
-    } else {
-      log.info('summary', 'starting fresh summary conversation', {
-        perspectiveId: args.perspective.id,
-      });
-      conversation = deps.llm.startConversation();
-      label = 'fresh';
-    }
+    log.info('summary', 'starting fresh summary conversation', {
+      perspectiveId: args.perspective.id,
+    });
+    conversation = deps.llm.startConversation();
+    label = 'fresh';
   }
 
   const { text } = await log.time('summary', `llm.ask (${label})`, () =>
     conversation.ask({
       system: SUMMARY_SYSTEM_PROMPT,
       user,
+      tools: ['Grep'],
       ...(deps.language ? { language: deps.language } : {}),
     }),
   );

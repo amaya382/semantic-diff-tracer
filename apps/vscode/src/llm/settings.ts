@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import {
   ClaudeLlmProvider,
   clampFlowMaxTurns,
-  effortToMaxThinkingTokens,
   formatUsageForLog,
   resolveClaudeExecutable,
 } from '@semantic-diff-tracer/llm-claude';
@@ -38,17 +37,13 @@ function resolveEnv(raw: unknown): Record<string, string> | undefined {
 
 export function buildClaudeProvider(cwd: string, logger?: LoggerPort): LlmProvider {
   // Env vars win over user settings so launch.json profiles can pin a fast
-  // model/effort for the dev host without touching global preferences.
+  // model for the dev host without touching global preferences.
   const config = vscode.workspace.getConfiguration('sdt');
   const claudeExec = resolveClaudeExecutable(config.get<string>('claudeExecutable', ''));
   if (!claudeExec) return missingExecutableProvider();
   const modelChoice = process.env['SDT_CLAUDE_MODEL'] ?? config.get<string>('claudeModel', 'sonnet');
-  const effortChoice =
-    process.env['SDT_CLAUDE_EFFORT'] ?? config.get<string>('claudeEffort', 'low');
   const modelSource = process.env['SDT_CLAUDE_MODEL'] ? 'env' : 'settings';
-  const effortSource = process.env['SDT_CLAUDE_EFFORT'] ? 'env' : 'settings';
   const model = resolveModel(modelChoice);
-  const maxThinkingTokens = effortToMaxThinkingTokens(effortChoice);
   const env = resolveEnv(config.get('environmentVariables'));
   const opts: ClaudeAdapterOptions = {
     cwd,
@@ -56,20 +51,15 @@ export function buildClaudeProvider(cwd: string, logger?: LoggerPort): LlmProvid
   };
   if (env) opts.env = env;
   if (model) opts.model = model;
-  if (maxThinkingTokens !== undefined) opts.maxThinkingTokens = maxThinkingTokens;
   if (logger) {
     logger.info('llm', 'config', {
       model: model ?? 'default (SDK inherits)',
       modelSource,
-      effort: effortChoice,
-      effortSource,
-      maxThinkingTokens: maxThinkingTokens ?? 'default (SDK inherits)',
     });
     opts.onStderr = (chunk) => logger.warn('llm', 'claude stderr', { chunk: chunk.trim() });
     opts.onUsage = (usage) => {
       logger.info('llm', 'tokens', {
         configuredModel: model ?? 'default',
-        configuredEffort: effortChoice,
         ...formatUsageForLog(usage),
       });
     };
@@ -110,5 +100,5 @@ export function readDefaultBaseBranch(): string {
 
 export function readFlowMaxTurns(): number {
   const config = vscode.workspace.getConfiguration('sdt');
-  return clampFlowMaxTurns(config.get<number>('flowMaxTurns', 20));
+  return clampFlowMaxTurns(config.get<number>('flowMaxTurns', 5));
 }

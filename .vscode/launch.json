@@ -25,8 +25,7 @@
       "sourceMaps": true,
       "preLaunchTask": "build vscode extension",
       "env": {
-        "SDT_CLAUDE_MODEL": "sonnet",
-        "SDT_CLAUDE_EFFORT": "low"
+        "SDT_CLAUDE_MODEL": "sonnet"
       }
     },
     {
@@ -44,8 +43,7 @@
       "sourceMaps": true,
       "preLaunchTask": "build vscode extension",
       "env": {
-        "SDT_CLAUDE_MODEL": "sonnet",
-        "SDT_CLAUDE_EFFORT": "low"
+        "SDT_CLAUDE_MODEL": "sonnet"
       }
     },
     {
@@ -64,8 +62,7 @@
       "sourceMaps": true,
       "preLaunchTask": "build vscode extension",
       "env": {
-        "SDT_CLAUDE_MODEL": "sonnet",
-        "SDT_CLAUDE_EFFORT": "low"
+        "SDT_CLAUDE_MODEL": "sonnet"
       }
     },
     {

@@ -356,11 +356,12 @@ export function activate(context: vscode.ExtensionContext): void {
         const payload = await summarize(
           {
             llm: deps.llm,
+            diff: deps.diff,
             sessionStore: deps.sessionStore,
             logger,
             language: readLanguageHint(),
           },
-          { ref, perspective },
+          { ref, perspective, ...(state.diff ? { diff: state.diff } : {}) },
         );
         state.summaries.set(perspective.id, payload);
       } catch (e) {
@@ -402,7 +403,7 @@ export function activate(context: vscode.ExtensionContext): void {
             language: readLanguageHint(),
             maxTurns: readFlowMaxTurns(),
           },
-          { ref, perspective },
+          { ref, perspective, ...(state.diff ? { diff: state.diff } : {}) },
         );
         state.flows.set(perspective.id, flow);
         advanceLoading(perspective, 'flow', 'Loading source files');

@@ -15,11 +15,6 @@ export interface ClaudeAdapterOptions {
   model?: 'sonnet' | 'opus' | 'haiku' | 'inherit' | (string & {});
   pathToClaudeCodeExecutable?: string;
   /**
-   * Maps to the SDK's `maxThinkingTokens`. Leave unset to inherit the SDK/CLI
-   * default (no explicit cap).
-   */
-  maxThinkingTokens?: number;
-  /**
    * Extra environment variables merged over `process.env` before spawning the
    * CLI. Vertex/Bedrock credentials belong here (`CLAUDE_CODE_USE_VERTEX=1`,
    * `ANTHROPIC_VERTEX_PROJECT_ID=...`, `AWS_*`, etc.) — the adapter pins
@@ -278,6 +273,11 @@ class ClaudeConversation implements Conversation {
     if (typeof input.maxTurns === 'number' && input.maxTurns > 0) {
       sdkOptions.maxTurns = input.maxTurns;
     }
+    // A per-ask `tools` override wins over the adapter default. An empty array
+    // is a valid choice (no tools = one-shot); only `undefined` falls back.
+    const effectiveTools = input.tools ?? READ_ONLY_TOOLS;
+    sdkOptions.tools = [...effectiveTools];
+    sdkOptions.allowedTools = [...effectiveTools];
     this.applyStaticOptions(sdkOptions);
 
     const user = input.language
@@ -311,11 +311,8 @@ class ClaudeConversation implements Conversation {
   }
 
   private applyStaticOptions(sdkOptions: Options): void {
-    // Restrict the toolset *and* pre-allow it: `tools` keeps Bash and the edit
-    // tools out of the model's hands, `allowedTools` keeps the survivors from
-    // stalling on a permission prompt nobody is there to answer.
-    sdkOptions.tools = [...READ_ONLY_TOOLS];
-    sdkOptions.allowedTools = [...READ_ONLY_TOOLS];
+    // `tools` / `allowedTools` are set per-ask in `ask()` so callers can
+    // narrow the toolset (or disable it) without an adapter option.
     // Isolation mode: no `settings.json` is loaded, so the caller's
     // `~/.claude/CLAUDE.md`, hooks, permissions, and enabled plugins never
     // reach the child. Provider auth comes from `.credentials.json` (loaded
@@ -327,9 +324,6 @@ class ClaudeConversation implements Conversation {
     if (this.options.model) sdkOptions.model = this.options.model;
     if (this.options.pathToClaudeCodeExecutable) {
       sdkOptions.pathToClaudeCodeExecutable = this.options.pathToClaudeCodeExecutable;
-    }
-    if (typeof this.options.maxThinkingTokens === 'number' && this.options.maxThinkingTokens > 0) {
-      sdkOptions.maxThinkingTokens = this.options.maxThinkingTokens;
     }
   }
 }

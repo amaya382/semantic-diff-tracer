@@ -1,7 +1,14 @@
 import type { DiffPort } from '../ports/diff.js';
 import type { UnifiedDiff } from '../domain/diff.js';
 import type { PrRef } from '../domain/pr-ref.js';
-import type { BlockRole, Focal, FocalKind, FlowBlock, Mock } from '../domain/flow.js';
+import type {
+  BlockRole,
+  Focal,
+  FocalKind,
+  FlowBlock,
+  Mock,
+  RefinedFlowPatch,
+} from '../domain/flow.js';
 import { mapNewToOldRange, summariseChange } from './diff-change.js';
 
 export interface RawBlock {
@@ -377,4 +384,161 @@ function mergeInto(prev: FlowBlock, extra: FlowBlock): void {
   // Children from extra don't survive dedupe — they belong to a block we're
   // discarding. Callers shouldn't rely on them being reachable. If future
   // scenarios need them, revisit here.
+}
+
+// ---------------------------------------------------------------------------
+// Refined-flow patch: parse & apply
+// ---------------------------------------------------------------------------
+
+interface RawRefinedFlowPatch {
+  replacements?: Array<{ blockId?: unknown; block?: unknown }>;
+  removals?: unknown[];
+  insertions?: Array<{ parentId?: unknown; index?: unknown; block?: unknown }>;
+}
+
+/**
+ * Parse the LLM-returned patch JSON into `RefinedFlowPatch`. Runs raw blocks
+ * through the same normalisation used by `planFlow`, so the client can trust
+ * that inserted/replaced blocks have the shape the rest of the pipeline
+ * expects. The `perspectiveId` seeds fallback ids the same way planFlow does.
+ */
+export function parseRefinedFlowPatch(
+  raw: unknown,
+  perspectiveId: string,
+): RefinedFlowPatch {
+  const source = (raw ?? {}) as RawRefinedFlowPatch;
+  const replacements: RefinedFlowPatch['replacements'] = [];
+  const removals: RefinedFlowPatch['removals'] = [];
+  const insertions: RefinedFlowPatch['insertions'] = [];
+
+  const rawReplacements = Array.isArray(source.replacements) ? source.replacements : [];
+  rawReplacements.forEach((entry, i) => {
+    if (!entry || typeof entry !== 'object') return;
+    const blockId = typeof entry.blockId === 'string' ? entry.blockId : '';
+    if (!blockId) return;
+    const rawBlock = entry.block;
+    if (!rawBlock || typeof rawBlock !== 'object') return;
+    const block = normalizeBlock(rawBlock as RawBlock, `${perspectiveId}-r${i}`);
+    // A replacement keeps the original block's id — the summary shown to the
+    // model referenced that id, and applying by id is the whole contract.
+    block.id = blockId;
+    replacements.push({ blockId, block });
+  });
+
+  const rawRemovals = Array.isArray(source.removals) ? source.removals : [];
+  for (const r of rawRemovals) {
+    if (typeof r === 'string' && r) removals.push(r);
+  }
+
+  const rawInsertions = Array.isArray(source.insertions) ? source.insertions : [];
+  rawInsertions.forEach((entry, i) => {
+    if (!entry || typeof entry !== 'object') return;
+    const parentId = entry.parentId === null || typeof entry.parentId === 'string'
+      ? entry.parentId
+      : null;
+    const index = typeof entry.index === 'number' && Number.isFinite(entry.index)
+      ? Math.max(0, Math.floor(entry.index))
+      : 0;
+    const rawBlock = entry.block;
+    if (!rawBlock || typeof rawBlock !== 'object') return;
+    const block = normalizeBlock(rawBlock as RawBlock, `${perspectiveId}-i${i}`);
+    insertions.push({ parentId, index, block });
+  });
+
+  return { replacements, removals, insertions };
+}
+
+/**
+ * Apply the patch onto an existing block tree. Touched blocks (replacements +
+ * insertions) are hydrated and get their `role` derived from the diff; the
+ * rest of the tree keeps its existing hydration untouched. Adjacent-dedupe
+ * runs at the end because a replacement or insertion may have created a
+ * mergeable neighbour.
+ */
+export async function applyRefinedFlowPatch(
+  currentBlocks: FlowBlock[],
+  patch: RefinedFlowPatch,
+  ref: PrRef,
+  diff: DiffPort,
+  unified: UnifiedDiff,
+): Promise<FlowBlock[]> {
+  const touched: FlowBlock[] = [];
+
+  const replacementById = new Map<string, FlowBlock>();
+  for (const r of patch.replacements) replacementById.set(r.blockId, r.block);
+  const removalSet = new Set<string>(patch.removals);
+
+  const walkForReplaceRemove = (nodes: FlowBlock[]): FlowBlock[] => {
+    const out: FlowBlock[] = [];
+    for (const n of nodes) {
+      if (removalSet.has(n.id)) continue;
+      const replacement = replacementById.get(n.id);
+      if (replacement) {
+        // Replacements come from the LLM without hydrated children — merge
+        // the surviving children of the block being replaced so nested
+        // structure is preserved unless the LLM insertion overwrites it.
+        const merged: FlowBlock = {
+          ...replacement,
+          children: replacement.children.length > 0
+            ? replacement.children
+            : walkForReplaceRemove(n.children),
+        };
+        touched.push(merged);
+        out.push(merged);
+        continue;
+      }
+      out.push({ ...n, children: walkForReplaceRemove(n.children) });
+    }
+    return out;
+  };
+
+  let next = walkForReplaceRemove(currentBlocks);
+
+  // Insertions: apply after replace/remove so `parentId` and `index` refer to
+  // the tree the LLM saw in the summary (which is the pre-apply tree with
+  // removals hidden but replacements in place). Do parent-side first, then
+  // root-level, to avoid inserting into a block that's about to be inserted.
+  const rootInsertions = patch.insertions.filter((ins) => ins.parentId === null);
+  const childInsertions = patch.insertions.filter((ins) => ins.parentId !== null);
+
+  const insertInto = (parent: FlowBlock, insertion: typeof childInsertions[number]): boolean => {
+    if (parent.id === insertion.parentId) {
+      const idx = Math.min(Math.max(0, insertion.index), parent.children.length);
+      parent.children.splice(idx, 0, insertion.block);
+      touched.push(insertion.block);
+      return true;
+    }
+    for (const child of parent.children) {
+      if (insertInto(child, insertion)) return true;
+    }
+    return false;
+  };
+
+  for (const insertion of childInsertions) {
+    let placed = false;
+    for (const root of next) {
+      if (insertInto(root, insertion)) {
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      // Parent id not found — fall back to root append so the block is not
+      // silently lost. Better a wrong location than a dropped narrative.
+      next.push(insertion.block);
+      touched.push(insertion.block);
+    }
+  }
+
+  for (const insertion of rootInsertions) {
+    const idx = Math.min(Math.max(0, insertion.index), next.length);
+    next.splice(idx, 0, insertion.block);
+    touched.push(insertion.block);
+  }
+
+  if (touched.length > 0) {
+    await hydrateFlowCode(touched, ref, diff);
+    assignRoles(touched, unified);
+  }
+  return dedupeAdjacentBlocks(next);
 }

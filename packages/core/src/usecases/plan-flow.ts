@@ -6,11 +6,13 @@ import { nullLogger } from '../ports/logger.js';
 import type { DiffPort } from '../ports/diff.js';
 import type { PrRef } from '../domain/pr-ref.js';
 import { prRefKey } from '../domain/pr-ref.js';
+import type { UnifiedDiff } from '../domain/diff.js';
 import type { PerspectiveDraft } from '../domain/perspective.js';
 import type { Flow } from '../domain/flow.js';
 import { traceModeFor } from '../domain/perspective.js';
 import { buildFlowSystemPrompt, buildFlowUserMessage } from '../prompts/flow.js';
 import { parseJsonStrict } from './json-parse.js';
+import { buildPerspectiveCodeContext } from './perspective-code-context.js';
 import {
   assignRoles,
   clipFocalBudgets,
@@ -29,7 +31,7 @@ export interface PlanFlowDeps {
   language?: string;
   /**
    * Cap on agent turns for the plan-flow ask. Adapters that don't run an
-   * agentic loop ignore it. Keep it small (default 20 in the extension) —
+   * agentic loop ignore it. Keep it small (default 5 in the extension) —
    * planFlow is a one-shot structured output task, not open-ended work.
    */
   maxTurns?: number;
@@ -39,31 +41,41 @@ export interface PlanFlowDeps {
 export interface PlanFlowArgs {
   ref: PrRef;
   perspective: PerspectiveDraft;
+  /** Pre-fetched diff — pass through when the caller already has one to avoid a redundant getDiff. */
+  diff?: UnifiedDiff;
 }
 
 export async function planFlow(deps: PlanFlowDeps, args: PlanFlowArgs): Promise<Flow> {
   const log = deps.logger ?? nullLogger;
   const key = prRefKey(args.ref);
-  const perspectiveSession = await deps.sessionStore.get(
-    sessionKey(key, { kind: 'perspective', perspectiveId: args.perspective.id }),
-  );
-  const baseSession = await deps.sessionStore.get(sessionKey(key, { kind: 'base' }));
-  const parent = perspectiveSession ?? baseSession;
 
-  const user = buildFlowUserMessage(args.perspective);
+  // Fetch the diff once — used both for the preloaded code context and later
+  // for role assignment on the returned blocks.
+  const unified = args.diff ?? (await deps.diff.getDiff(args.ref));
+  const codeContext = await buildPerspectiveCodeContext(
+    args.ref,
+    args.perspective,
+    unified,
+    deps.diff,
+  );
   log.info('flow', 'planFlow ask', {
     perspectiveId: args.perspective.id,
     kind: args.perspective.kind,
     traceMode: traceModeFor(args.perspective.kind),
-    parent: parent ?? '(none)',
+    fullFiles: codeContext.fullFiles.length,
+    slicedFiles: codeContext.slicedFiles.length,
+    codeContextBytes: codeContext.bytes,
   });
-  const conversation = parent
-    ? deps.llm.resumeConversation(parent).fork()
-    : deps.llm.startConversation();
+
+  const user = buildFlowUserMessage(args.perspective, codeContext.text);
+  // Fresh conversation — inheriting the extract/perspective session did not
+  // cut Read-tool turns and instead pumped 300k+ cacheRead tokens per call.
+  const conversation = deps.llm.startConversation();
   const { text } = await log.time('flow', 'llm.ask (planFlow)', () =>
     conversation.ask({
       system: buildFlowSystemPrompt(args.perspective.kind),
       user,
+      tools: ['Grep'],
       ...(deps.language ? { language: deps.language } : {}),
       ...(deps.maxTurns ? { maxTurns: deps.maxTurns } : {}),
     }),
@@ -77,7 +89,6 @@ export async function planFlow(deps: PlanFlowDeps, args: PlanFlowArgs): Promise<
   const rawBlocks = Array.isArray(raw.blocks) ? raw.blocks : [];
   const normalised = normalizeFromRawBlocks(rawBlocks, args.perspective.id);
   await hydrateFlowCode(normalised, args.ref, deps.diff);
-  const unified = await deps.diff.getDiff(args.ref);
   assignRoles(normalised, unified);
   const blocks = dedupeAdjacentBlocks(normalised);
   clipFocalBudgets(blocks);

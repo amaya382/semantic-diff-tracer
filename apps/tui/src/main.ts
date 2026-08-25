@@ -43,7 +43,6 @@ Usage:
 Environment:
   SDT_LANGUAGE          Free-form language hint appended to every LLM prompt (default: en)
   SDT_CLAUDE_MODEL      sonnet | opus | haiku | inherit | <full-id> (default: SDK default)
-  SDT_CLAUDE_EFFORT     low | medium | high | max                    (default: SDK default)
   SDT_CLAUDE_EXECUTABLE Absolute path to the claude CLI (default: resolved from PATH)
 `);
 }

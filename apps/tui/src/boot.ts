@@ -19,7 +19,6 @@ import {
 import {
   ClaudeLlmProvider,
   clampFlowMaxTurns,
-  effortToMaxThinkingTokens,
   formatUsageForLog,
   resolveClaudeExecutable,
 } from '@semantic-diff-tracer/llm-claude';
@@ -47,13 +46,11 @@ export function buildTuiDeps(opts: BuildOptions): TuiDeps {
   const model = process.env['SDT_CLAUDE_MODEL']
     ? { model: process.env['SDT_CLAUDE_MODEL'] }
     : {};
-  const effortTokens = effortToMaxThinkingTokens(process.env['SDT_CLAUDE_EFFORT']);
   const claudeExecutable = resolveClaudeExecutable(process.env['SDT_CLAUDE_EXECUTABLE']);
   const llm = new ClaudeLlmProvider({
     cwd: opts.cwd,
     ...(claudeExecutable ? { pathToClaudeCodeExecutable: claudeExecutable } : {}),
     ...model,
-    ...(effortTokens !== undefined ? { maxThinkingTokens: effortTokens } : {}),
     onStderr: (chunk) => console.error(`[warn] llm: claude stderr ${chunk.trim()}`),
     onUsage: (usage) => {
       console.error(`[info] llm: tokens ${JSON.stringify(formatUsageForLog(usage))}`);

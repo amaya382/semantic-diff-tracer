@@ -12,6 +12,11 @@ export interface LlmAskInput {
    * Adapters that don't run an agentic loop ignore this.
    */
   maxTurns?: number;
+  /**
+   * Restrict the agent's toolset for this ask. Omit to use the adapter's
+   * default read-only set. An empty array means single-shot (no tools).
+   */
+  tools?: readonly string[];
 }
 
 export interface LlmAskResult {

@@ -67,7 +67,10 @@ The \`source\` field is the raw content of the chosen form — no markdown fence
 
 Point and name. Do not restate the diff.`;
 
-export function buildSummaryUserMessage(perspective: PerspectiveDraft): string {
+export function buildSummaryUserMessage(
+  perspective: PerspectiveDraft,
+  codeContext: string,
+): string {
   const hunks = perspective.hunkRefs
     .map((h) => `- ${h.file} (hunk #${h.hunkIndex})`)
     .join('\n');
@@ -76,6 +79,6 @@ Outcome: ${perspective.outcome}
 Kind: ${perspective.kind}
 Hunks:
 ${hunks}
-
+${codeContext ? `\n${codeContext}\n` : ''}
 Produce the summary JSON now.`;
 }

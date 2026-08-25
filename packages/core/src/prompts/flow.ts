@@ -8,7 +8,8 @@ These rules hold whatever the perspective is:
 - Each block covers **one focus range** in one file. Show only the code the reader needs at that step; leave the surrounding file for the reader to scroll to.
 - Context blocks are allowed. The starting point may be far from the diff — include it when the story needs it. Mark such a block with \`"role": "unchanged"\`.
 - Surface a concern only when the code itself invites one. Do not invent concerns to fill space.
-- **Do not restate the diff**. Point and name.
+- **narrative is at most 2 short sentences.** No code copy, no line-by-line commentary — the reader has the code beside your narrative. Point and name.
+- **Do not restate the diff, and do not paste code into \`narrative\` or \`visibleVars\`.** The Trace tab renders the source next to your text; duplicating it wastes tokens and dilutes the story.
 - **Deleted code**: when the PR removes code, still create a block for that step. Set \`focus\` to the *post-merge* location where the removed logic used to be called from (the surrounding surviving code) and set \`beforeFocus\` to the *base-side* range of the actual removed lines. Mark it \`"role": "removed"\`. The reviewer will read the removed code on the Before pane; skipping the block would hide the change entirely.
 - **Merge related steps**: if several small changes belong to the same idea (e.g. the same helper is deleted from 5 call sites), emit **one** block whose focus points at a representative site and describe the others in \`narrative\` ("also at foo.ts:42, foo.ts:88"). The reviewer can jump to the others via the editor once they understand the shape.`;
 
@@ -50,21 +51,19 @@ Do NOT restate diff text in \`focal.reason\`. Point and name.`;
 const TRACE_MODE_SECTIONS: Record<TraceMode, string> = {
   flow: `## This perspective changes runtime behaviour — trace the execution path
 
-Walk one imagined run from its entry point to the observable effect. Aim for **5 to 12 blocks total** across the whole tree. If the perspective is large, group related steps under a parent block whose children carry the detail; if it is small, keep it flat.
+Walk one imagined run from its entry point to the observable effect. Aim for **4 to 8 blocks total** across the whole tree — fewer is fine when the perspective is small. Group related steps under a parent when it helps; otherwise keep it flat.
 
-**Auto-mock** external I/O, filesystem, DB, clock, and randomness. Tag every mock with a short reason. Do not follow control flow into unrelated code paths.
+**Auto-mock** external I/O, filesystem, DB, clock, and randomness — one line per mock, short reason. Do not follow control flow into unrelated code paths. **Cap the whole tree at 8 mocks.** Fold repeat-of-same-kind mocks (5 fs reads) into one.
 
-**visibleVars carry the trace.** They are what makes this a walk-through rather than a list of snippets, so treat them as required output, not decoration:
+**visibleVars carry the trace** — the values that move between blocks, in one consistent imagined run:
 
-- Give every block **2 to 5 entries**: the values the block reads, whatever it derives, and what it hands to the next block. An empty \`visibleVars\` is almost always a mistake. Only leave it empty for a block that genuinely moves no data (a pure guard clause, an import-only change), and say so in \`narrative\`.
-- **Write concrete sample values, never types or placeholders.** A diff cannot tell you real runtime values, so invent plausible ones: \`"u_42"\`, \`"{ retries: 3 }"\`, \`"null"\` — not \`"string"\`, \`"<userId>"\`, or \`"the request body"\`.
-- **Keep one imagined run consistent across the whole tree.** If block 1 sets \`userId = "u_42"\`, every later block that still sees it repeats \`"u_42"\`. The reader follows a single made-up request from top to bottom; that is how the propagation becomes visible.
-- **Repeat live variables, and show what changed.** When a block modifies a value carried in from earlier, emit the new value and record the previous one in \`note\` (e.g. \`"was 'draft'; set by validateInput"\`). When it is untouched but still relevant, repeat it unchanged.
-- Name variables exactly as the code names them. \`note\` gives origin or change in a few words; use null when the name and value already say everything.
+- Give every block **2 to 3 entries**. An empty \`visibleVars\` is fine only for a pure guard or import-only block; say so briefly in \`narrative\`.
+- **Concrete sample values, never types or placeholders.** \`"u_42"\`, \`"{ retries: 3 }"\`, \`"null"\` — not \`"string"\` or \`"<userId>"\`.
+- **One consistent imagined run.** \`userId = "u_42"\` in block 1 stays \`"u_42"\` in later blocks that still see it. Show what changed in \`note\` (\`"was 'draft'"\`); use null when the name and value speak for themselves.
 
 Concerns come from the path itself: a subtle invariant, a missing null check, a race, an unhandled branch.
 
-Focal usage: the block where the new behaviour materialises is the natural core; the block where the request first enters the changed path is entry; the block where the effect becomes visible to the caller or downstream is contract (observable-effect sub-case).`,
+Focal usage: the block where the new behaviour materialises is core; where the request first enters the changed path is entry; where the effect becomes visible to the caller or downstream is contract.`,
 
   structural: `## This perspective restructures without changing behaviour — trace the equivalence
 
@@ -149,16 +148,18 @@ type Block = {
 Start the response with '{' and end with '}'. Field names are load-bearing.`;
 
 export function buildFlowSystemPrompt(kind: PerspectiveKind): string {
-  return [
-    FLOW_BASE_PROMPT,
-    FLOW_FOCAL_PROMPT,
-    TRACE_MODE_SECTIONS[traceModeFor(kind)],
-    FLOW_OUTPUT_SCHEMA,
-  ].join('\n\n');
+  const mode = traceModeFor(kind);
+  // Surface mode caps focal at 1 block anyway — the full focal essay just
+  // burns tokens the model will not use.
+  const parts =
+    mode === 'surface'
+      ? [FLOW_BASE_PROMPT, TRACE_MODE_SECTIONS[mode], FLOW_OUTPUT_SCHEMA]
+      : [FLOW_BASE_PROMPT, FLOW_FOCAL_PROMPT, TRACE_MODE_SECTIONS[mode], FLOW_OUTPUT_SCHEMA];
+  return parts.join('\n\n');
 }
 
 const CLOSING_BY_MODE: Record<TraceMode, string> = {
-  flow: 'Produce the flow JSON now. Keep total blocks in the 5-12 range across the whole tree; if you must exceed 12 to cover the perspective, group under parents so no single level exceeds 8. Populate visibleVars on every block, using one consistent set of invented sample values across the whole trace.',
+  flow: 'Produce the flow JSON now. Keep total blocks in the 4-8 range across the whole tree and mocks ≤ 8. Every block: narrative ≤ 2 short sentences (no code copy), visibleVars 2-3 entries with concrete sample values consistent across the trace.',
   structural:
     'Produce the flow JSON now. Keep it to 3-8 blocks. Say what each block preserves; keep visibleVars to values whose identity across the rewrite is the point, leaving it empty rather than inventing runtime values, and leave mocks empty.',
   contract:
@@ -167,7 +168,10 @@ const CLOSING_BY_MODE: Record<TraceMode, string> = {
     'Produce the flow JSON now. Keep it to 1-4 blocks. visibleVars carries the changed settings themselves (new value in value, old value in note) and nothing else; leave mocks empty.',
 };
 
-export function buildFlowUserMessage(perspective: PerspectiveDraft): string {
+export function buildFlowUserMessage(
+  perspective: PerspectiveDraft,
+  codeContext: string,
+): string {
   const hunks = perspective.hunkRefs
     .map((h) => `- ${h.file} (hunk #${h.hunkIndex})`)
     .join('\n');
@@ -176,6 +180,6 @@ Kind: ${perspective.kind}
 Outcome: ${perspective.outcome}
 Hunks in scope:
 ${hunks}
-
+${codeContext ? `\n${codeContext}\n` : ''}
 ${CLOSING_BY_MODE[traceModeFor(perspective.kind)]}`;
 }

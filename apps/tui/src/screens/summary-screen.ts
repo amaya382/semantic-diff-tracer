@@ -18,6 +18,7 @@ export async function runSummaryScreen(
   const payload = await summarize(
     {
       llm: deps.llm,
+      diff: deps.diff,
       sessionStore: deps.sessionStore,
       logger: deps.logger,
       language: deps.language,

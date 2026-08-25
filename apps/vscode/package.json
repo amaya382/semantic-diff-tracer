@@ -138,10 +138,10 @@
         },
         "sdt.flowMaxTurns": {
           "type": "number",
-          "default": 20,
+          "default": 5,
           "minimum": 1,
           "maximum": 200,
-          "description": "Cap on agent turns for Flow planning and refinement. Higher values let the model read more source files before it commits to a plan; lower values keep the initial wait short."
+          "description": "Cap on agent turns for Flow planning and refinement. The default 5 fits the preloaded-code approach — the primary source is embedded in the prompt, so the model rarely needs to Grep. Raise it only when a very large perspective still needs on-the-fly exploration."
         },
         "sdt.claudeExecutable": {
           "type": "string",
@@ -182,18 +182,6 @@
           ],
           "default": "sonnet",
           "markdownDescription": "Model the Claude Agent SDK uses. `default` leaves the SDK/CLI default in place; `inherit` uses whatever the ambient claude CLI is configured for."
-        },
-        "sdt.claudeEffort": {
-          "type": "string",
-          "enum": [
-            "default",
-            "low",
-            "medium",
-            "high",
-            "max"
-          ],
-          "default": "low",
-          "markdownDescription": "Thinking effort mapped to `maxThinkingTokens`. `default` = SDK default; `low` = 1024, `medium` = 4096, `high` = 16384, `max` = 32768."
         }
       }
     }

@@ -6,31 +6,10 @@ import type { LlmCallUsage } from './adapter.js';
  * falls back to `fallback`. Both surfaces read this from user config, so
  * keeping the bounds in one place avoids drift.
  */
-export function clampFlowMaxTurns(raw: unknown, fallback = 20): number {
+export function clampFlowMaxTurns(raw: unknown, fallback = 5): number {
   const n = typeof raw === 'string' ? Number(raw) : raw;
   if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0) return fallback;
   return Math.max(1, Math.min(200, Math.round(n)));
-}
-
-/**
- * Maps the four canonical effort levels to `maxThinkingTokens`. Returns
- * `undefined` for anything else (including `'default'`), leaving the SDK
- * default in place. Kept here rather than in each surface so a new adapter
- * caller doesn't reinvent the mapping.
- */
-export function effortToMaxThinkingTokens(effort: string | undefined): number | undefined {
-  switch (effort) {
-    case 'low':
-      return 1024;
-    case 'medium':
-      return 4096;
-    case 'high':
-      return 16384;
-    case 'max':
-      return 32768;
-    default:
-      return undefined;
-  }
 }
 
 /**

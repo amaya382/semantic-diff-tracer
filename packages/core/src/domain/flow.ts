@@ -92,3 +92,15 @@ export interface Flow {
 export type BlockPath = number[];
 
 export type StepAction = 'over' | 'in' | 'out' | 'reverse';
+
+/**
+ * Minimal edit script for refining a flow tree in response to a mock change.
+ * The LLM returns only what differs — replacements match by existing block id,
+ * insertions carry a parent id (null = root) plus insertion index, and
+ * removals list the block ids to drop. Everything else is left as-is.
+ */
+export interface RefinedFlowPatch {
+  replacements: Array<{ blockId: string; block: FlowBlock }>;
+  removals: string[];
+  insertions: Array<{ parentId: string | null; index: number; block: FlowBlock }>;
+}
