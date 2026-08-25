@@ -13,6 +13,10 @@
 
 semantic-diff-tracer is a VSCode extension with a companion TUI CLI that helps a human reviewer grasp a GitHub PR before reading the diff line by line. The extension and the TUI share the same core, so the perspectives, summaries, and traces you see are identical across both surfaces.
 
+<p align="center">
+  <img src="media/screenshots/overview.png" width="900" alt="Overview" />
+</p>
+
 ## Why semantic-diff-tracer?
 
 - **Outcome-based perspectives** — hunks are grouped by "what became possible after this merge," not by file path or commit order
@@ -103,6 +107,10 @@ A perspective is an *outcome*, not a file group. The extraction prompt enforces 
 
 ### Summary tab
 
+<p align="center">
+  <img src="media/screenshots/summary.png" width="900" alt="Summary tab: Summary chat and diagram panel" />
+</p>
+
 Clicking a perspective opens a panel with two tabs. The **Summary** tab shows:
 
 - **Outcome** — one line: what became possible
@@ -112,6 +120,10 @@ Clicking a perspective opens a panel with two tabs. The **Summary** tab shows:
 - **Q&A** — drag-select any text, ask a question; the answer is pinned as a section. Ask a follow-up on any section; delete when it stops being useful.
 
 ### Trace tab
+
+<p align="center">
+  <img src="media/screenshots/trace.png" width="900" alt="Trace tab: flow stepper with a focused code panel" />
+</p>
 
 The **Trace** tab shows the same perspective as a block tree with a stepper:
 

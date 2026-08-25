@@ -13,6 +13,10 @@
 
 semantic-diff-tracer は、レビュアーが差分を 1 行ずつ読み始める前に GitHub PR の全体像を掴むための VSCode extension、および同じコアを共有する TUI CLI です。extension と TUI は同じ core を共有するので、表示される観点やサマリ、トレースは両方の環境で同一になります。
 
+<p align="center">
+  <img src="media/screenshots/overview.png" width="900" alt="全体像" />
+</p>
+
 ## なぜ semantic-diff-tracer？
 
 - **Outcome ベースの観点**：hunk を「マージ後に何ができるようになったか」でグループ化します。ファイルパスでもコミット順でもありません。
@@ -103,6 +107,10 @@ conversation は PR ref をキーに、extension のグローバルストレー�
 
 ### Summary タブ
 
+<p align="center">
+  <img src="media/screenshots/summary.png" width="900" alt="Summary タブ：Summary チャットとダイアグラムパネル" />
+</p>
+
 観点をクリックすると 2 タブのパネルが開きます。**Summary** タブに載る要素は次のとおりです。
 
 - **Outcome**：何ができるようになったかを 1 行で
@@ -112,6 +120,10 @@ conversation は PR ref をキーに、extension のグローバルストレー�
 - **Q&A**：任意テキストをドラッグ選択して質問すると、回答がセクションとして pin されます。任意のセクションに follow-up でき、不要になったら削除します
 
 ### Trace タブ
+
+<p align="center">
+  <img src="media/screenshots/trace.png" width="900" alt="Trace タブ：flow stepper とフォーカス付きコードパネル" />
+</p>
 
 **Trace** タブは同じ観点を block tree の stepper で見せます。
 
