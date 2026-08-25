@@ -109,6 +109,24 @@ interface SelectionContext {
   origin: ForkOrigin;
 }
 
+/**
+ * A question the reviewer sent but hasn't seen a reply for yet. Rendered
+ * inline where the answer will land (top of the stack for a new ask, tail
+ * of a conversation for a follow-up) so the pane never goes silent between
+ * submit and the host's next snapshot push.
+ *
+ * `sectionId` absent → new conversation; the pending disappears when the
+ * next snapshot's leading section carries this `question`. Present → a
+ * follow-up; disappears when that section grows a turn with this `question`.
+ */
+interface PendingChat {
+  question: string;
+  sectionId?: string;
+  originLabel: 'trace' | 'summary';
+  startedAt: number;
+}
+let pendingChats: PendingChat[] = [];
+
 declare function acquireVsCodeApi(): {
   postMessage(msg: unknown): void;
   setState(s: unknown): void;
@@ -217,9 +235,29 @@ window.addEventListener('message', (event) => {
     // (e.g. Open Trace opens on the Trace tab). It is authoritative when set —
     // user clicks after that mutate `topTab` alone.
     if (snapshot.activeTab) topTab = snapshot.activeTab;
+    prunePendingChats();
     render();
   }
 });
+
+/**
+ * Drop pending chats that the fresh snapshot has already answered. A new-ask
+ * pending is answered when a section whose first turn matches the question
+ * appears; a follow-up pending is answered when its section's turns contain
+ * a matching question. Match is exact on the question string — the host
+ * echoes back the same text it stored.
+ */
+function prunePendingChats(): void {
+  if (pendingChats.length === 0) return;
+  pendingChats = pendingChats.filter((p) => {
+    if (p.sectionId === undefined) {
+      return !snapshot.sections.some((s) => s.turns[0]?.question === p.question);
+    }
+    const section = snapshot.sections.find((s) => s.sectionId === p.sectionId);
+    if (!section) return false;
+    return !section.turns.some((t) => t.question === p.question);
+  });
+}
 
 document.addEventListener('keydown', (e) => {
   if (topTab !== 'trace') return;
@@ -929,7 +967,8 @@ function buildChatSubtitle(): string {
 
 function buildChatBody(): HTMLElement {
   const body = el('div', { class: 'chat-body' });
-  if (snapshot.sections.length === 0) {
+  const newPending = pendingChats.filter((p) => p.sectionId === undefined);
+  if (snapshot.sections.length === 0 && newPending.length === 0) {
     body.append(
       el('p', {
         class: 'chat-empty',
@@ -940,9 +979,90 @@ function buildChatBody(): HTMLElement {
     return body;
   }
   const stack = el('div', { class: 'chat-stack' });
+  // New-conversation pendings sit on top: sections push down in newest-first
+  // order (unshift on completion), so this keeps the just-asked question in
+  // the same visual slot the answered section will occupy.
+  for (const p of newPending) stack.append(buildPendingConversation(p));
   for (const s of snapshot.sections) stack.append(buildConversation(s));
   body.append(stack);
   return body;
+}
+
+/**
+ * Placeholder card that mirrors a folded `conv` header: origin badge, the
+ * question as preview, and a spinner in the turn-count slot so the reviewer
+ * sees the send landed and something is running.
+ *
+ * The × button dismisses the placeholder without touching the host — used
+ * when the ask errored on the host side and no snapshot will arrive to
+ * clear it.
+ */
+function buildPendingConversation(p: PendingChat): HTMLElement {
+  const previewText = p.question.slice(0, 90);
+  const header = el('div', {
+    class: 'conv-header conv-pending-header',
+    children: [
+      el('span', { class: 'conv-chevron', text: '⋯' }),
+      el('span', {
+        class: `conv-origin origin-${p.originLabel}`,
+        text: p.originLabel,
+      }),
+      el('span', { class: 'conv-preview', text: previewText }),
+      el('span', {
+        class: 'conv-pending-elapsed',
+        text: formatElapsed(p.startedAt),
+        dataset: { startedAt: String(p.startedAt) },
+      }),
+      el('span', { class: 'spinner conv-pending-spinner' }),
+      el('button', {
+        class: 'conv-delete',
+        text: '×',
+        attrs: { title: 'Dismiss this pending question' },
+        onClick: (e) => {
+          e.stopPropagation();
+          dismissPending(p);
+        },
+      }),
+    ],
+  });
+  return el('section', { class: 'conv conv-pending', children: [header] });
+}
+
+function dismissPending(p: PendingChat): void {
+  pendingChats = pendingChats.filter((x) => x !== p);
+  render();
+}
+
+/**
+ * Placeholder inside an existing conversation for a follow-up whose answer
+ * hasn't arrived yet. Same slot the real turn will occupy, so the question
+ * doesn't jump when the snapshot lands.
+ */
+function buildPendingTurn(p: PendingChat): HTMLElement {
+  return el('div', {
+    class: 'turn turn-pending',
+    children: [
+      el('div', { class: 'turn-q', text: p.question }),
+      el('div', {
+        class: 'turn-a-pending',
+        children: [
+          el('span', { class: 'spinner' }),
+          el('span', { class: 'turn-pending-label', text: 'Waiting for reply…' }),
+          el('span', {
+            class: 'turn-pending-elapsed',
+            text: formatElapsed(p.startedAt),
+            dataset: { startedAt: String(p.startedAt) },
+          }),
+          el('button', {
+            class: 'conv-delete turn-pending-dismiss',
+            text: '×',
+            attrs: { title: 'Dismiss this pending follow-up' },
+            onClick: () => dismissPending(p),
+          }),
+        ],
+      }),
+    ],
+  });
 }
 
 function buildConversation(section: QaSection): HTMLElement {
@@ -1026,6 +1146,10 @@ function buildConversation(section: QaSection): HTMLElement {
       }),
     );
   }
+  for (const p of pendingChats) {
+    if (p.sectionId !== section.sectionId) continue;
+    body.append(buildPendingTurn(p));
+  }
   const followInput = el('textarea', {
     class: 'follow-input',
     attrs: { placeholder: 'Follow up… (Enter to send, Shift+Enter for newline)', rows: '1' },
@@ -1040,6 +1164,13 @@ function buildConversation(section: QaSection): HTMLElement {
       question: value,
     });
     followInput.value = '';
+    pendingChats.push({
+      question: value,
+      sectionId: section.sectionId,
+      originLabel,
+      startedAt: Date.now(),
+    });
+    render();
   };
   followInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
@@ -1121,6 +1252,12 @@ function submitComposer(textarea: HTMLTextAreaElement): void {
   textarea.value = '';
   composerDraft = '';
   clearCitation();
+  pendingChats.push({
+    question,
+    originLabel: forkOrigin === 'flow' ? 'trace' : 'summary',
+    startedAt: Date.now(),
+  });
+  render();
 }
 
 function quoteBlock(ctx: SelectionContext): string {
@@ -2167,6 +2304,21 @@ function installStyles(): void {
     .turn-a p { margin: 0 0 0.4rem; }
     .turn-a code { background: var(--vscode-textCodeBlock-background); padding: 0.05rem 0.25rem; border-radius: 3px; font-family: var(--vscode-editor-font-family, monospace); }
     .turn-a pre.code { background: var(--vscode-textCodeBlock-background); padding: 0.5rem; border-radius: 4px; overflow-x: auto; font-family: var(--vscode-editor-font-family, monospace); font-size: 0.8rem; }
+    /* Pending chat placeholders — same shape as a folded conv header so the
+       just-sent question sits in the slot the answer will occupy. Spinner in
+       the turn-count column signals "in flight". Own grid because it packs
+       elapsed + spinner + dismiss where the real header packs turn-count +
+       delete. */
+    .conv.conv-pending { border-style: dashed; opacity: 0.9; }
+    .conv-pending-header { grid-template-columns: 16px auto 1fr auto auto 22px; cursor: default; }
+    .conv-pending-header:hover { background: transparent; }
+    .conv-pending-elapsed { font-family: var(--vscode-editor-font-family, monospace); font-size: 0.65rem; opacity: 0.55; font-variant-numeric: tabular-nums; }
+    .conv-pending-spinner { width: 0.75em; height: 0.75em; border-width: 1.5px; }
+    /* Follow-up placeholder inside an open conversation. */
+    .turn.turn-pending { opacity: 0.85; }
+    .turn-a-pending { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; opacity: 0.8; padding: 0.15rem 0; }
+    .turn-pending-label { font-style: italic; }
+    .turn-pending-elapsed { margin-left: auto; font-family: var(--vscode-editor-font-family, monospace); font-size: 0.7rem; opacity: 0.6; font-variant-numeric: tabular-nums; }
     .follow-row { display: flex; gap: 0.3rem; align-items: flex-end; }
     .follow-input { flex: 1; padding: 0.25rem 0.45rem; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, transparent); border-radius: 4px; font-family: inherit; font-size: 0.8rem; resize: vertical; }
     .follow-btn { padding: 0.25rem 0.7rem; }
