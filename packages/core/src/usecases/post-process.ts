@@ -4,7 +4,8 @@ import type {
   PerspectiveSet,
   IncidentalChange,
 } from '../domain/perspective.js';
-import { KIND_PRIORITY, isPerspectiveKind } from '../domain/perspective.js';
+import type { HunkRef, HunkRole } from '../domain/diff.js';
+import { KIND_PRIORITY, coercePerspectiveKind } from '../domain/perspective.js';
 
 const MERGE_THRESHOLD = 0.5;
 
@@ -28,7 +29,20 @@ function fileOverlap(a: PerspectiveDraft, b: PerspectiveDraft): number {
 }
 
 function normalizeKind(kind: unknown): PerspectiveKind {
-  return isPerspectiveKind(kind) ? kind : DEFAULT_KIND;
+  return coercePerspectiveKind(kind) ?? DEFAULT_KIND;
+}
+
+function normalizeHunkRole(value: unknown): HunkRole | undefined {
+  return value === 'primary' || value === 'peripheral' ? value : undefined;
+}
+
+function normalizeHunkRefs(refs: readonly HunkRef[]): HunkRef[] {
+  return refs.map((r) => {
+    const role = normalizeHunkRole((r as { role?: unknown }).role);
+    const out: HunkRef = { file: r.file, hunkIndex: r.hunkIndex };
+    if (role) out.role = role;
+    return out;
+  });
 }
 
 export function dominantKind(a: PerspectiveKind, b: PerspectiveKind): PerspectiveKind {
@@ -39,10 +53,25 @@ export function dominantKind(a: PerspectiveKind, b: PerspectiveKind): Perspectiv
   return rank(a) <= rank(b) ? a : b;
 }
 
+function dominantRole(a: HunkRole | undefined, b: HunkRole | undefined): HunkRole | undefined {
+  // primary beats peripheral: a hunk marked primary by either side needs the
+  // reviewer's attention, so keep it primary after the merge.
+  if (a === 'primary' || b === 'primary') return 'primary';
+  if (a === 'peripheral' || b === 'peripheral') return 'peripheral';
+  return undefined;
+}
+
 function mergePair(a: PerspectiveDraft, b: PerspectiveDraft): PerspectiveDraft {
-  const hunks = [...a.hunkRefs];
+  const hunks: HunkRef[] = a.hunkRefs.map((h) => ({ ...h }));
   for (const h of b.hunkRefs) {
-    if (!hunks.some((x) => x.file === h.file && x.hunkIndex === h.hunkIndex)) hunks.push(h);
+    const existing = hunks.find((x) => x.file === h.file && x.hunkIndex === h.hunkIndex);
+    if (existing) {
+      const role = dominantRole(existing.role, h.role);
+      if (role) existing.role = role;
+      else delete existing.role;
+    } else {
+      hunks.push({ ...h });
+    }
   }
   return {
     id: a.id,
@@ -93,7 +122,11 @@ export function demoteSingletons(set: PerspectiveSet): PerspectiveSet {
 }
 
 export function postProcess(set: PerspectiveSet): PerspectiveSet {
-  const merged = mergeOverlapping(set.perspectives);
+  const cleaned = set.perspectives.map((p) => ({
+    ...p,
+    hunkRefs: normalizeHunkRefs(p.hunkRefs),
+  }));
+  const merged = mergeOverlapping(cleaned);
   const normalized = merged.map((p) => ({ ...p, kind: normalizeKind(p.kind) }));
   return demoteSingletons({ ...set, perspectives: normalized });
 }

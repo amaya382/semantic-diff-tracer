@@ -41,7 +41,11 @@ export async function buildPerspectiveCodeContext(
   const budget = opts.maxFullFileBytes ?? DEFAULT_MAX_FULL_FILE_BYTES;
   const contextLines = opts.sliceContextLines ?? DEFAULT_SLICE_CONTEXT_LINES;
 
-  const primaryFiles = uniquePrimaryFiles(perspective.hunkRefs);
+  // Only preload code for hunks the planner is allowed to build blocks from.
+  // Peripheral hunks may be mentioned in narrative when adjacent, but they do
+  // not deserve their own file read or slice budget.
+  const primaryRefs = perspective.hunkRefs.filter((r) => (r.role ?? 'primary') === 'primary');
+  const primaryFiles = uniquePrimaryFiles(primaryRefs);
   const sections: string[] = [];
   const fullFiles: string[] = [];
   const slicedFiles: string[] = [];
@@ -50,7 +54,7 @@ export async function buildPerspectiveCodeContext(
   for (const path of primaryFiles) {
     const head = await diffPort.readFileAtSha(ref.headSha, path);
     if (head === null) {
-      const fallback = buildHunkFallbackSection(path, perspective.hunkRefs, diff);
+      const fallback = buildHunkFallbackSection(path, primaryRefs, diff);
       if (fallback) {
         sections.push(fallback);
         slicedFiles.push(path);
@@ -66,7 +70,7 @@ export async function buildPerspectiveCodeContext(
       continue;
     }
 
-    const sliced = buildSlicedSection(path, head, perspective.hunkRefs, diff, contextLines);
+    const sliced = buildSlicedSection(path, head, primaryRefs, diff, contextLines);
     if (sliced) {
       sections.push(sliced);
       slicedFiles.push(path);

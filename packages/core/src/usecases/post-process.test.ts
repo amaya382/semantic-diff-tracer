@@ -19,7 +19,7 @@ function draft(
 describe('dominantKind', () => {
   it('keeps the kind that needs the most reviewer attention', () => {
     expect(dominantKind('config', 'fix')).toBe('fix');
-    expect(dominantKind('api', 'refactor')).toBe('api');
+    expect(dominantKind('contract', 'refactor')).toBe('contract');
     expect(dominantKind('docs', 'test')).toBe('test');
   });
 });

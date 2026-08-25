@@ -11,7 +11,8 @@ These rules hold whatever the perspective is:
 - **narrative is at most 2 short sentences.** No code copy, no line-by-line commentary — the reader has the code beside your narrative. Point and name.
 - **Do not restate the diff, and do not paste code into \`narrative\` or \`visibleVars\`.** The Trace tab renders the source next to your text; duplicating it wastes tokens and dilutes the story.
 - **Deleted code**: when the PR removes code, still create a block for that step. Set \`focus\` to the *post-merge* location where the removed logic used to be called from (the surrounding surviving code) and set \`beforeFocus\` to the *base-side* range of the actual removed lines. Mark it \`"role": "removed"\`. The reviewer will read the removed code on the Before pane; skipping the block would hide the change entirely.
-- **Merge related steps**: if several small changes belong to the same idea (e.g. the same helper is deleted from 5 call sites), emit **one** block whose focus points at a representative site and describe the others in \`narrative\` ("also at foo.ts:42, foo.ts:88"). The reviewer can jump to the others via the editor once they understand the shape.`;
+- **Merge related steps**: if several small changes belong to the same idea (e.g. the same helper is deleted from 5 call sites), emit **one** block whose focus points at a representative site and describe the others in \`narrative\` ("also at foo.ts:42, foo.ts:88"). The reviewer can jump to the others via the editor once they understand the shape.
+- **Peripheral hunks are not blocks.** The user message splits this perspective's hunks into two lists: primary (carries the change the reviewer opened this perspective for) and peripheral (rode along — an adjacent comment tweak, a docstring edit, a rename ripple, a format-only edit inside a primary hunk's file). Build blocks from primary hunks only. Peripheral hunks may be **named in \`narrative\`** on the block whose file they touch ("also updates the doc comment above"), never as their own block. If a peripheral hunk sits in a file no primary hunk touches, drop it silently — the Incidental panel already surfaces those to the reviewer.`;
 
 /**
  * Value-neutral marker for "this is where the PR's intent lives". Kept
@@ -172,14 +173,21 @@ export function buildFlowUserMessage(
   perspective: PerspectiveDraft,
   codeContext: string,
 ): string {
-  const hunks = perspective.hunkRefs
+  const primary = perspective.hunkRefs.filter((h) => (h.role ?? 'primary') === 'primary');
+  const peripheral = perspective.hunkRefs.filter((h) => h.role === 'peripheral');
+  const primaryList = primary
     .map((h) => `- ${h.file} (hunk #${h.hunkIndex})`)
     .join('\n');
+  const peripheralList = peripheral.length > 0
+    ? peripheral.map((h) => `- ${h.file} (hunk #${h.hunkIndex})`).join('\n')
+    : '(none)';
   return `Perspective: ${perspective.title}
 Kind: ${perspective.kind}
 Outcome: ${perspective.outcome}
-Hunks in scope:
-${hunks}
+Primary hunks (build blocks from these):
+${primaryList}
+Peripheral hunks (name in narrative if adjacent, never a block of their own):
+${peripheralList}
 ${codeContext ? `\n${codeContext}\n` : ''}
 ${CLOSING_BY_MODE[traceModeFor(perspective.kind)]}`;
 }

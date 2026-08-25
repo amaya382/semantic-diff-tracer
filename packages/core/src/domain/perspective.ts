@@ -5,8 +5,7 @@ export type PerspectiveKind =
   | 'feature'
   | 'fix'
   | 'refactor'
-  | 'api'
-  | 'schema'
+  | 'contract'
   | 'config'
   | 'deps'
   | 'docs'
@@ -23,8 +22,7 @@ export const TRACE_MODE_BY_KIND: Record<PerspectiveKind, TraceMode> = {
   feature: 'flow',
   fix: 'flow',
   refactor: 'structural',
-  api: 'contract',
-  schema: 'contract',
+  contract: 'contract',
   config: 'surface',
   deps: 'surface',
   docs: 'surface',
@@ -38,8 +36,7 @@ export const TRACE_MODE_BY_KIND: Record<PerspectiveKind, TraceMode> = {
 export const KIND_PRIORITY: PerspectiveKind[] = [
   'feature',
   'fix',
-  'api',
-  'schema',
+  'contract',
   'refactor',
   'config',
   'deps',
@@ -47,8 +44,26 @@ export const KIND_PRIORITY: PerspectiveKind[] = [
   'docs',
 ];
 
+const LEGACY_KIND_ALIASES: Record<string, PerspectiveKind> = {
+  api: 'contract',
+  schema: 'contract',
+};
+
 export function isPerspectiveKind(value: unknown): value is PerspectiveKind {
   return typeof value === 'string' && value in TRACE_MODE_BY_KIND;
+}
+
+/**
+ * Accept a legacy kind ("api", "schema") the LLM may still emit, folding it
+ * into the surviving `contract` kind so a prompt drift cannot leak an unknown
+ * label into the pipeline.
+ */
+export function coercePerspectiveKind(value: unknown): PerspectiveKind | undefined {
+  if (isPerspectiveKind(value)) return value;
+  if (typeof value === 'string' && value in LEGACY_KIND_ALIASES) {
+    return LEGACY_KIND_ALIASES[value];
+  }
+  return undefined;
 }
 
 export function traceModeFor(kind: PerspectiveKind): TraceMode {

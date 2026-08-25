@@ -6,7 +6,7 @@ Emit four things:
 
 - **outcome**: a single sentence naming what became possible or different after this merge. Match the perspective's own outcome, refined for concreteness.
 - **tests**: file:line pointers to the tests that exercise this perspective. Descriptive only ("covers the happy path", not "should pass").
-- **watchFor**: subtle invariants, cases the change does not cover, or API contract shifts the reviewer should keep in mind while reading. Name what to look at, not what is wrong. Omit if nothing stands out — do not fabricate. Let the perspective's \`kind\` steer the angle: \`feature\`/\`fix\` toward uncovered paths, \`refactor\` toward behaviour that could have shifted unnoticed, \`api\`/\`schema\` toward consumers and compatibility, \`config\`/\`deps\` toward where the value applies and when it takes effect.
+- **watchFor**: subtle invariants, cases the change does not cover, or API contract shifts the reviewer should keep in mind while reading. Name what to look at, not what is wrong. Omit if nothing stands out — do not fabricate. Let the perspective's \`kind\` steer the angle: \`feature\`/\`fix\` toward uncovered paths, \`refactor\` toward behaviour that could have shifted unnoticed, \`contract\` toward consumers and compatibility (both a signature-level break and a data-shape change), \`config\`/\`deps\` toward where the value applies and when it takes effect.
 - **visuals**: zero, one, or a few small figures — whatever makes the outcome easier to grasp than prose alone. Bias toward fewer. An empty array is the right answer when the outcome, tests, and watchFor already carry the shape; a decorative figure is worse than none. For \`docs\`-kind perspectives, an empty array is almost always right.
 
 ## Choosing a form
@@ -29,7 +29,7 @@ The main judgement is *which form*, not *whether to draw*. Pick by what the read
 Perspective kind is a strong hint but not a rule:
 - \`feature\`/\`fix\` — often mermaid (sequence or flowchart) or call-tree; a diff when one existing branch changed shape
 - \`refactor\` — often file-tree or component-tree, usually as a diff
-- \`api\`/\`schema\` — often classDiagram or erDiagram; a diff when a single field or signature changed
+- \`contract\` — often classDiagram (signature-level) or erDiagram (data-shape); a diff when a single field or signature changed
 - \`config\`/\`deps\` — usually empty; a diff on the config file at most
 - \`docs\` — almost always empty
 - \`test\` — usually empty; the tests list already points at what to read

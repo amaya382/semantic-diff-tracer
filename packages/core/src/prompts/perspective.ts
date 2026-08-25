@@ -9,6 +9,7 @@ Extract from the diff itself, not from a fixed taxonomy. The number varies by PR
 - Start from what became **possible or different** after this merge. Each such outcome is a candidate perspective.
 - Fold pure-mechanical changes (renames, moves, formatting) into the perspective they serve. If they serve none, group them last under "Incidental changes".
 - Tests, docs, and fixtures belong under the perspective they exercise, not in their own bucket — unless the PR is genuinely a test-only or docs-only change.
+- **Tag each hunk's \`role\` inside its perspective.** \`primary\` = a hunk that carries the perspective's outcome (the reviewer must read it to see the change). \`peripheral\` = a hunk that belongs to the perspective by association but does not carry it — an adjacent comment tweak, a docstring edit next to a real change, a rename ripple, a format-only edit that came along for the ride. When in doubt, mark \`primary\`. For a \`docs\`-kind perspective, comment/prose edits ARE the point and stay \`primary\`; the same edit inside a \`feature\` or \`fix\` perspective is \`peripheral\`.
 - If two candidates share more than half their hunks, they are one perspective with two facets. Merge and note the facets as sub-bullets.
 - If a candidate has only one hunk and no downstream effect, demote it into a neighboring perspective or into "Incidental changes".
 
@@ -21,14 +22,13 @@ Tag each perspective with the \`kind\` that matches what it changes. The kind dr
 - \`feature\`: a new capability or code path exists that did not before.
 - \`fix\`: existing behaviour was wrong and is now corrected.
 - \`refactor\`: the structure moved but the behaviour is meant to be identical (rename, extract, inline, dedupe).
-- \`api\`: a calling convention or exported signature changed — callers must adapt.
-- \`schema\`: the shape of data changed — persisted rows, wire payloads, config file format, generated types.
+- \`contract\`: what the world outside this code sees has changed — a calling convention or exported signature callers must adapt to, or the shape of data crossing a boundary (persisted rows, wire payloads, config file format, generated types).
 - \`config\`: settings, CI, build, or infrastructure definitions.
 - \`deps\`: dependencies added, upgraded, or removed.
 - \`docs\`: documentation only. Only when the whole PR is documentation; otherwise fold docs into the perspective they describe.
 - \`test\`: tests and fixtures only. Only when the whole PR is tests; otherwise fold tests into the perspective they exercise.
 
-When a perspective fits two kinds, pick the one the reviewer must read most carefully: \`feature\` and \`fix\` over \`api\` and \`schema\`, those over \`refactor\`, and any of them over \`config\`, \`deps\`, \`docs\`, \`test\`.
+When a perspective fits two kinds, pick the one the reviewer must read most carefully: \`feature\` and \`fix\` over \`contract\`, those over \`refactor\`, and any of them over \`config\`, \`deps\`, \`docs\`, \`test\`.
 
 Output STRICT JSON matching this TypeScript type (no prose, no markdown fences):
 
@@ -39,8 +39,8 @@ Output STRICT JSON matching this TypeScript type (no prose, no markdown fences):
       "id": string,               // kebab-case slug
       "title": string,            // 2-6 words
       "outcome": string,          // one line: what became possible or different
-      "hunkRefs": [{"file": string, "hunkIndex": number}],
-      "kind": "feature" | "fix" | "refactor" | "api" | "schema" | "config" | "deps" | "docs" | "test"
+      "hunkRefs": [{"file": string, "hunkIndex": number, "role": "primary" | "peripheral"}],
+      "kind": "feature" | "fix" | "refactor" | "contract" | "config" | "deps" | "docs" | "test"
     }
   ],
   "incidental": [
