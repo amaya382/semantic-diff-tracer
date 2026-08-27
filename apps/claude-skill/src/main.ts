@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -94,8 +95,13 @@ function defaultOutPath(cwd: string, ref: PrRef): string {
   return path.join(cwd, `sdt-report-${slug}.html`);
 }
 
+// `npx skills add` may install this bundle as a symlink under
+// `~/.claude/skills/trace-diff/`. In that layout `process.argv[1]` retains the
+// symlink path while `import.meta.url` is Node's realpath-resolved location,
+// so a bare `===` compare misses. Normalize both through realpath so the entry
+// runs whether the file was reached directly or via a symlink.
 const invokedDirectly = process.argv[1]
-  ? fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+  ? realpathSync(fileURLToPath(import.meta.url)) === realpathSync(path.resolve(process.argv[1]))
   : false;
 if (invokedDirectly) {
   void main().catch((err) => {
