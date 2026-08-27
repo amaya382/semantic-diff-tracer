@@ -30,6 +30,16 @@ const RULES = [
     dir: 'apps/vscode/src',
     forbidden: [/from\s+['"]ink['"]/, /require\(['"]ink['"]\)/],
   },
+  {
+    label: 'apps/claude-skill must not import vscode',
+    dir: 'apps/claude-skill/src',
+    forbidden: [/from\s+['"]vscode['"]/, /require\(['"]vscode['"]\)/],
+  },
+  {
+    label: 'apps/claude-skill must not import ink',
+    dir: 'apps/claude-skill/src',
+    forbidden: [/from\s+['"]ink['"]/, /require\(['"]ink['"]\)/],
+  },
 ];
 
 async function walk(dir) {

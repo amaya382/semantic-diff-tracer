@@ -11,7 +11,7 @@
 > Experimental. Interfaces, commands, and prompts are still moving.
 > See the [issues](https://github.com/amaya382/semantic-diff-tracer/issues) for known follow-ups and roadmap.
 
-semantic-diff-tracer is a VSCode extension with a companion TUI CLI that helps a human reviewer grasp a GitHub PR before reading the diff line by line. The extension and the TUI share the same core, so the perspectives, summaries, and traces you see are identical across both surfaces.
+semantic-diff-tracer is a VSCode extension with a companion TUI CLI and a Claude Code skill (`trace-diff`) that emits a single-file HTML report. All three surfaces share the same core, so the perspectives, summaries, and traces are identical whichever one you use.
 
 <p align="center">
   <img src="media/screenshots/overview.png" width="900" alt="Overview" />
@@ -31,6 +31,7 @@ Common to both surfaces: Git 2.20+, a GitHub account, and credentials for the LL
 <tr>
   <th align="left">VSCode extension</th>
   <th align="left">TUI</th>
+  <th align="left">Claude Code skill</th>
 </tr>
 <tr>
   <td valign="top">
@@ -65,6 +66,31 @@ brew install \
 ```
 
 Provides both `semantic-diff-tracer` and its short alias `sdt`.
+
+  </td>
+  <td valign="top">
+
+**Requirements**
+
+- Node.js 20+
+- A `claude` CLI login (or `ANTHROPIC_API_KEY` / Vertex / Bedrock env)
+- `GITHUB_TOKEN` / `GH_TOKEN`, or a logged-in `gh` CLI
+
+**Install** — via [`npx skills`](https://www.npmjs.com/package/skills):
+
+```bash
+npx skills add \
+  amaya382/semantic-diff-tracer
+```
+
+Installs `trace-diff` into `~/.claude/skills/trace-diff/` (with `-g`) or into `./.claude/skills/trace-diff/` (project-scoped, default). The skill ships a self-contained ESM bundle — no `node_modules` needed after install.
+
+Manual install (works without `skills` too):
+
+```bash
+mkdir -p ~/.claude/skills
+cp -r skills/trace-diff ~/.claude/skills/
+```
 
   </td>
 </tr>
@@ -210,6 +236,29 @@ Env vars (the `SDT_CLAUDE_*` entries belong to the Claude adapter — the only L
 | `SDT_CLAUDE_EXECUTABLE`     | Absolute path to the `claude` CLI (default: resolved from `PATH`)                |
 | `GITHUB_TOKEN` / `GH_TOKEN` | GitHub credential (VSCode's auth provider isn't available in a terminal)         |
 
+## 🤖 Claude Code skill: `trace-diff`
+
+`trace-diff` produces a single-file HTML report — outcome-based perspectives, per-perspective Summary, and a Trace tab whose Step In / Step Over / Step Out / Back buttons walk a pre-planned block tree on the client. No LLM calls happen after the file is written, so the report is a portable artifact you can commit to a review folder or send to a teammate.
+
+Compared to the VSCode extension, `trace-diff` deliberately drops **mock refine** and **Q&A pin** — both need live LLM calls after render, which conflicts with the "self-contained HTML" goal. Point users who need those at the extension.
+
+### Invoke
+
+Once installed as `~/.claude/skills/trace-diff/`, run the bundled binary directly:
+
+```bash
+node ~/.claude/skills/trace-diff/bin/render.mjs \
+  <URL | owner/repo#N | #N | branch> [-o out.html] [--no-mermaid-cdn]
+```
+
+Or ask Claude Code to invoke the skill by describing the task ("render this PR as an HTML report", "trace-diff で PR 見せて"). SKILL.md carries the trigger phrasing.
+
+The binary prints the absolute path of the written HTML on stdout — surface that back to the user. It reads the same environment as the TUI (`SDT_LANGUAGE`, `SDT_CLAUDE_MODEL`, `SDT_CLAUDE_EXECUTABLE`, `SDT_FLOW_MAX_TURNS`, `GITHUB_TOKEN` / `GH_TOKEN`).
+
+### Offline / airtight mode
+
+Pass `--no-mermaid-cdn` for an air-gapped report. Mermaid source stays visible as monospace text — still legible, just unrendered.
+
 ## 🧪 Development
 
 Building from source is only needed for hacking on the extension or the TUI; end users install via the Marketplace / Homebrew as shown in [Quick Start](#-quick-start).
@@ -222,7 +271,10 @@ npm run build                     # build every workspace
 npm test                          # vitest across packages/*
 npm run check:boundaries          # ensure core does not import vscode / terminal UI
 npm run package:vscode            # produce apps/vscode/semantic-diff-tracer-*.vsix
+npm run bundle:skill              # rebuild skills/trace-diff/bin/render.mjs
 ```
+
+The `trace-diff` bundle at `skills/trace-diff/bin/render.mjs` is a **checked-in build output** — that's what lets `npx skills add amaya382/semantic-diff-tracer` produce a runnable copy without a `node_modules` install step on the user's side. When you touch `apps/claude-skill/src/`, rebuild the bundle and commit it in the same change.
 
 Install the locally-built `.vsix` into your VSCode:
 

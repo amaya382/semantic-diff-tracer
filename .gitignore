@@ -7,3 +7,9 @@ out/
 coverage/
 .DS_Store
 .vscode-test/
+
+# The trace-diff skill ships a pre-built bundle so `npx skills add` produces
+# a runnable copy without a node_modules install step. Unignore it explicitly
+# in case a global gitignore treats `bin/` as build output.
+!/skills/trace-diff/bin/
+!/skills/trace-diff/bin/**

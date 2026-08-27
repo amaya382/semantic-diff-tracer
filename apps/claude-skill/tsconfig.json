@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "composite": true,
+    "types": ["node"]
+  },
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/diff-git" },
+    { "path": "../../packages/github-octokit" },
+    { "path": "../../packages/llm-claude" },
+    { "path": "../../packages/session-store-fs" }
+  ],
+  "include": ["src/**/*"],
+  "exclude": ["dist", "node_modules", "**/*.test.ts"]
+}

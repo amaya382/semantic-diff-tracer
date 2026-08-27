@@ -1,0 +1,25 @@
+{
+  "name": "@semantic-diff-tracer/claude-skill",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "trace-diff": "./dist/main.js"
+  },
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -b",
+    "bundle": "tsc -b && node esbuild.mjs",
+    "test": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "dependencies": {
+    "@semantic-diff-tracer/core": "*",
+    "@semantic-diff-tracer/diff-git": "*",
+    "@semantic-diff-tracer/github-octokit": "*",
+    "@semantic-diff-tracer/llm-claude": "*",
+    "@semantic-diff-tracer/session-store-fs": "*"
+  }
+}

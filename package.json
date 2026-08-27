@@ -23,6 +23,7 @@
     "package:vscode": "npm run package -w apps/vscode",
     "package:tui": "npm run build -w apps/tui",
     "bundle:tui": "npm run bundle -w apps/tui",
+    "bundle:skill": "npm run bundle -w apps/claude-skill",
     "publish:vscode": "npm run publish -w apps/vscode"
   },
   "devDependencies": {

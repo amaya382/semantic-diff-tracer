@@ -8,6 +8,7 @@
     { "path": "packages/session-store-fs" },
     { "path": "packages/testing" },
     { "path": "apps/vscode" },
-    { "path": "apps/tui" }
+    { "path": "apps/tui" },
+    { "path": "apps/claude-skill" }
   ]
 }

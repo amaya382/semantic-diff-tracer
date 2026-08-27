@@ -11,7 +11,7 @@
 > 実験的な実装です。インターフェース、コマンド、プロンプトはまだ流動的です。
 > 既知の宿題やロードマップは [issues](https://github.com/amaya382/semantic-diff-tracer/issues) を参照してください。
 
-semantic-diff-tracer は、レビュアーが差分を 1 行ずつ読み始める前に GitHub PR の全体像を掴むための VSCode extension、および同じコアを共有する TUI CLI です。extension と TUI は同じ core を共有するので、表示される観点やサマリ、トレースは両方の環境で同一になります。
+semantic-diff-tracer は、レビュアーが差分を 1 行ずつ読み始める前に GitHub PR の全体像を掴むためのツールです。VSCode extension、TUI CLI、そして 1 ファイルで完結する HTML レポートを生成する Claude Code skill (`trace-diff`) の 3 面構成で、いずれも同じ core を共有するため、表示される観点やサマリ、トレースはどの環境でも同一になります。
 
 <p align="center">
   <img src="media/screenshots/overview.png" width="900" alt="全体像" />
@@ -31,6 +31,7 @@ semantic-diff-tracer は、レビュアーが差分を 1 行ずつ読み始め�
 <tr>
   <th align="left">VSCode extension</th>
   <th align="left">TUI</th>
+  <th align="left">Claude Code skill</th>
 </tr>
 <tr>
   <td valign="top">
@@ -65,6 +66,31 @@ brew install \
 ```
 
 `semantic-diff-tracer` とその短縮エイリアス `sdt` の両方が入ります。
+
+  </td>
+  <td valign="top">
+
+**要件**
+
+- Node.js 20+
+- `claude` CLI ログイン（もしくは `ANTHROPIC_API_KEY` / Vertex / Bedrock env）
+- `GITHUB_TOKEN` / `GH_TOKEN`、あるいはログイン済みの `gh` CLI
+
+**インストール**（[`npx skills`](https://www.npmjs.com/package/skills) から）：
+
+```bash
+npx skills add \
+  amaya382/semantic-diff-tracer
+```
+
+`trace-diff` が `~/.claude/skills/trace-diff/`（`-g` 指定時）またはプロジェクト配下の `./.claude/skills/trace-diff/`（デフォルト）に入ります。self-contained な ESM bundle を同梱しているので、install 後に `node_modules` は不要です。
+
+手動インストール（`skills` CLI 不要のパス）：
+
+```bash
+mkdir -p ~/.claude/skills
+cp -r skills/trace-diff ~/.claude/skills/
+```
 
   </td>
 </tr>
@@ -210,6 +236,29 @@ sdt <URL | owner/repo#N | #N | branch>
 | `SDT_CLAUDE_EXECUTABLE`     | `claude` CLI の絶対パス（既定：`PATH` から解決）                          |
 | `GITHUB_TOKEN` / `GH_TOKEN` | GitHub 資格情報。ターミナルには VSCode の auth provider がないので必要    |
 
+## 🤖 Claude Code skill: `trace-diff`
+
+`trace-diff` は 1 ファイルで完結する HTML レポートを生成する skill です。outcome ベースの観点、観点ごとの Summary、そして Step In / Step Over / Step Out / Back で block tree を歩ける Trace タブを含みます。レンダリング後は LLM を呼ばないので、生成された HTML はレビュー用フォルダに commit したりチームメイトに送ったりできる、portable な artifact になります。
+
+VSCode extension と比べて、`trace-diff` は **mock refine** と **Q&A pin** を意図的に落としています。どちらも生成後に LLM を呼ぶ必要があり、「1 ファイルで完結」というゴールと衝突するためです。これらが必要なユーザーには extension を案内してください。
+
+### 呼び出し方
+
+`~/.claude/skills/trace-diff/` に install した後は、同梱の binary を直接叩けます。
+
+```bash
+node ~/.claude/skills/trace-diff/bin/render.mjs \
+  <URL | owner/repo#N | #N | branch> [-o out.html] [--no-mermaid-cdn]
+```
+
+もしくは Claude Code に対して「この PR を HTML レポートにして」「trace-diff で PR 見せて」と依頼すれば、SKILL.md のトリガに沿って呼び出されます。
+
+binary は生成した HTML の絶対パスを stdout に出力するので、それをそのままユーザーに返してください。読む環境変数は TUI と同じ（`SDT_LANGUAGE`, `SDT_CLAUDE_MODEL`, `SDT_CLAUDE_EXECUTABLE`, `SDT_FLOW_MAX_TURNS`, `GITHUB_TOKEN` / `GH_TOKEN`）です。
+
+### オフライン / エアギャップモード
+
+`--no-mermaid-cdn` を渡すと、Mermaid の CDN 参照が消えます。図の source は monospace text として残るので、読めることは読めます（描画されないだけ）。
+
 ## 🧪 開発
 
 ソースからのビルドは extension や TUI の開発時にのみ必要です。エンドユーザーは [クイックスタート](#-クイックスタート) の Marketplace / Homebrew を使ってください。
@@ -222,7 +271,10 @@ npm run build                     # 全 workspace をビルド
 npm test                          # packages/* に対する vitest
 npm run check:boundaries          # core が vscode / ターミナル UI を import しないことを強制
 npm run package:vscode            # apps/vscode/semantic-diff-tracer-*.vsix を生成
+npm run bundle:skill              # skills/trace-diff/bin/render.mjs を再ビルド
 ```
+
+`skills/trace-diff/bin/render.mjs` は **コミット対象のビルド成果物** です。これがあることで、`npx skills add amaya382/semantic-diff-tracer` がユーザー側で `node_modules` を install せずに動く copy を生成できます。`apps/claude-skill/src/` を触ったら、同じ変更で bundle を再ビルドしてコミットしてください。
 
 ローカルビルドした `.vsix` を VSCode に入れる場合は次のとおりです。
 
