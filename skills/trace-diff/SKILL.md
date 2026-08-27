@@ -5,7 +5,7 @@ description: Render a GitHub PR or a local branch diff as a single self-containe
 
 # trace-diff
 
-Emit a single-file HTML report for a PR using the semantic-diff-tracer pipeline. The report is meant for reviewers who want to grasp the PR outside VSCode: it contains outcome-based perspectives, per-perspective Summary (Outcome / Watch-for / Tests / Visualization), and a Trace tab whose Step In / Step Over / Step Out / Back buttons walk a pre-planned block tree on the client. No LLM calls happen after the file is written.
+Emit a single-file HTML report for a PR using the semantic-diff-tracer pipeline. The report is meant for reviewers who want to grasp the PR outside VSCode: it contains outcome-based perspectives, per-perspective Summary (Outcome / Visualization / Watch-for / Tests), and a Trace tab whose Step In / Step Over / Step Out / Back buttons walk a pre-planned block tree on the client. No LLM calls happen after the file is written.
 
 ## When to use
 
@@ -64,7 +64,7 @@ On success the binary prints the absolute path of the generated HTML on stdout. 
 - **Header**: PR title, TL;DR, author, base ← head refs, optional reading-order note.
 - **Sidebar**: one entry per perspective for jump navigation.
 - **Per perspective**:
-  - **Summary tab**: Outcome, Watch-for, Tests, Visualization (mermaid diagrams render when the Mermaid CDN is reachable; source stays visible when it is not).
+  - **Summary tab**: Outcome, Visualization, Watch-for, Tests (mermaid diagrams render when the Mermaid CDN is reachable; source stays visible when it is not).
   - **Trace tab**: block-tree outline + Step In / Step Over / Step Out / Back buttons; block-level Focus (before/after code), Variables, Mocks, Concerns; keyboard shortcuts `i` / `s` / `o` / `b` (or `F11` / `F10` / `F12`).
 - **Incidental changes**: category, note, and touched files.
 

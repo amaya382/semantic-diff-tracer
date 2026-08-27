@@ -65,6 +65,12 @@ function renderSummaryPanel(p: PerspectiveDraft, summary: SummaryPayload | undef
   const outcome = s.outcome && s.outcome !== p.outcome
     ? `<div class="card"><h3>Outcome</h3><p>${escapeHtml(s.outcome)}</p></div>`
     : '';
+  const visuals = s.visuals.length
+    ? s.visuals.map((v) => renderVisual(v)).join('')
+    : '';
+  const visualsCard = visuals
+    ? `<div class="card"><h3>Visualization</h3>${visuals}</div>`
+    : '';
   const watch = s.watchFor.length
     ? `<div class="card"><h3>Watch for</h3><ul class="plain">${s.watchFor
         .map((w) => {
@@ -85,13 +91,7 @@ function renderSummaryPanel(p: PerspectiveDraft, summary: SummaryPayload | undef
         )
         .join('')}</ul></div>`
     : '';
-  const visuals = s.visuals.length
-    ? s.visuals.map((v) => renderVisual(v)).join('')
-    : '';
-  const visualsCard = visuals
-    ? `<div class="card"><h3>Visualization</h3>${visuals}</div>`
-    : '';
-  return `${outcome}${watch}${tests}${visualsCard}`;
+  return `${outcome}${visualsCard}${watch}${tests}`;
 }
 
 function renderTracePanel(flow: Flow | undefined): string {
