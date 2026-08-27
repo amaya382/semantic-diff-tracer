@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -47,9 +48,12 @@ Environment:
 `);
 }
 
-// Only run when invoked directly, not when imported.
+// Only run when invoked directly, not when imported. The Homebrew tap
+// symlinks the bundle into `libexec/bin`, so `process.argv[1]` keeps the
+// symlink path while `import.meta.url` is Node's realpath-resolved location;
+// normalize both through realpath so the bare `===` compare does not miss.
 const invokedDirectly = process.argv[1]
-  ? fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+  ? realpathSync(fileURLToPath(import.meta.url)) === realpathSync(path.resolve(process.argv[1]))
   : false;
 if (invokedDirectly) {
   void main();
