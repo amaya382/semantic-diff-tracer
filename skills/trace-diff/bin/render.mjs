@@ -122,6 +122,7 @@ var require_fast_content_type_parse = __commonJS({
 });
 
 // src/main.ts
+import { realpathSync as realpathSync3 } from "node:fs";
 import * as fs4 from "node:fs/promises";
 import * as os2 from "node:os";
 import * as path4 from "node:path";
@@ -23456,7 +23457,7 @@ function defaultOutPath(cwd2, ref) {
   const slug = ref.kind === "github" ? `${ref.owner}-${ref.repo}-${ref.number}` : `${ref.baseRef.replace(/\//g, "-")}..${ref.headRef.replace(/\//g, "-")}`;
   return path4.join(cwd2, `sdt-report-${slug}.html`);
 }
-var invokedDirectly = process.argv[1] ? fileURLToPath(import.meta.url) === path4.resolve(process.argv[1]) : false;
+var invokedDirectly = process.argv[1] ? realpathSync3(fileURLToPath(import.meta.url)) === realpathSync3(path4.resolve(process.argv[1])) : false;
 if (invokedDirectly) {
   void main().catch((err) => {
     console.error(`trace-diff: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
