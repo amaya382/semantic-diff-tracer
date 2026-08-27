@@ -23176,6 +23176,8 @@ function renderSummaryPanel(p, summary) {
   }
   const s = summary.summary;
   const outcome = s.outcome && s.outcome !== p.outcome ? `<div class="card"><h3>Outcome</h3><p>${escapeHtml(s.outcome)}</p></div>` : "";
+  const visuals = s.visuals.length ? s.visuals.map((v) => renderVisual(v)).join("") : "";
+  const visualsCard = visuals ? `<div class="card"><h3>Visualization</h3>${visuals}</div>` : "";
   const watch = s.watchFor.length ? `<div class="card"><h3>Watch for</h3><ul class="plain">${s.watchFor.map((w) => {
     const anchor = w.anchor ? `<span class="anchor">${escapeHtml(formatAnchor(w.anchor.file, w.anchor.line))}</span>` : "";
     return `<li class="watch-item"><span>${escapeHtml(w.note)}</span>${anchor}</li>`;
@@ -23185,9 +23187,7 @@ function renderSummaryPanel(p, summary) {
       formatAnchor(t.file, t.line)
     )}</span></li>`
   ).join("")}</ul></div>` : "";
-  const visuals = s.visuals.length ? s.visuals.map((v) => renderVisual(v)).join("") : "";
-  const visualsCard = visuals ? `<div class="card"><h3>Visualization</h3>${visuals}</div>` : "";
-  return `${outcome}${watch}${tests}${visualsCard}`;
+  return `${outcome}${visualsCard}${watch}${tests}`;
 }
 function renderTracePanel(flow) {
   if (!flow) {
