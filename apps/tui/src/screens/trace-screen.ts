@@ -6,8 +6,9 @@ import type {
   PerspectiveDraft,
   PrRef,
   StepAction,
+  TraceDepth,
 } from '@semantic-diff-tracer/core';
-import { blockAt, planFlow, refineFlowFromMock, stepFlow } from '@semantic-diff-tracer/core';
+import { DEFAULT_TRACE_DEPTH, blockAt, planFlow, refineFlowFromMock, stepFlow } from '@semantic-diff-tracer/core';
 import type { TuiDeps } from '../boot.js';
 import { ask } from '../io/prompt.js';
 
@@ -25,8 +26,9 @@ export async function runTraceScreen(
   deps: TuiDeps,
   ref: PrRef,
   perspective: PerspectiveDraft,
+  traceDepth: TraceDepth = DEFAULT_TRACE_DEPTH,
 ): Promise<void> {
-  console.log('\nPlanning flow…');
+  console.log(`\nPlanning flow (trace-depth=${traceDepth})…`);
   let flow = await planFlow(
     {
       llm: deps.llm,
@@ -36,7 +38,7 @@ export async function runTraceScreen(
       language: deps.language,
       maxTurns: deps.flowMaxTurns,
     },
-    { ref, perspective },
+    { ref, perspective, traceDepth },
   );
   let cursor: BlockPath = [0];
   const history: BlockPath[] = [];

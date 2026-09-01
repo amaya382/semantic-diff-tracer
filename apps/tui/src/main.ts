@@ -27,11 +27,11 @@ async function main(): Promise<void> {
     const checkout = await ensureCheckout(ref, { repoCwd: cwd, logger: deps.logger });
     deps.diff = new GitDiffAdapter({ cwd: checkout.worktreePath });
   }
-  const perspective = await runPerspectiveScreen(deps, ref);
-  if (!perspective) return;
-  const nextScreen = await runSummaryScreen(deps, ref, perspective);
+  const choice = await runPerspectiveScreen(deps, ref, deps.traceDepth);
+  if (!choice) return;
+  const nextScreen = await runSummaryScreen(deps, ref, choice.perspective, choice.traceDepth);
   if (nextScreen === 'trace') {
-    await runTraceScreen(deps, ref, perspective);
+    await runTraceScreen(deps, ref, choice.perspective, choice.traceDepth);
   }
 }
 
@@ -45,6 +45,7 @@ Environment:
   SDT_LANGUAGE          Free-form language hint appended to every LLM prompt (default: en)
   SDT_CLAUDE_MODEL      sonnet | opus | haiku | inherit | <full-id> (default: SDK default)
   SDT_CLAUDE_EXECUTABLE Absolute path to the claude CLI (default: resolved from PATH)
+  SDT_TRACE_DEPTH       normal | deep — initial trace depth (default: normal); toggle with 'd' at the perspective screen
 `);
 }
 

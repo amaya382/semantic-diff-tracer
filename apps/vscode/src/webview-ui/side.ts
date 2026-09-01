@@ -1,4 +1,4 @@
-import type { PerspectiveDraft, PerspectiveSet, PrRef } from '@semantic-diff-tracer/core';
+import type { PerspectiveDraft, PerspectiveSet, PrRef, TraceDepth } from '@semantic-diff-tracer/core';
 import { el, empty } from './common/dom.js';
 import { kindChip, kindChipCss } from './common/kind-chip.js';
 
@@ -11,6 +11,7 @@ interface Snapshot {
   set?: PerspectiveSet;
   loadingMessage?: string;
   loadingStartedAt?: number;
+  traceDepth?: TraceDepth;
 }
 
 declare function acquireVsCodeApi(): {
@@ -225,8 +226,48 @@ function buildPerspectivesList(perspectives: PerspectiveDraft[]): HTMLElement {
   return el('section', {
     class: 'card perspectives',
     children: [
-      el('h3', { text: `Perspectives (${perspectives.length})` }),
+      el('div', {
+        class: 'perspectives-header',
+        children: [
+          el('h3', { text: `Perspectives (${perspectives.length})` }),
+          buildTraceDepthToggle(),
+        ],
+      }),
       list,
+    ],
+  });
+}
+
+function buildTraceDepthToggle(): HTMLElement {
+  const depth: TraceDepth = snapshot.traceDepth ?? 'normal';
+  const isDeep = depth === 'deep';
+  const checkbox = el('input', {
+    attrs: { type: 'checkbox', role: 'switch', 'aria-label': 'Deep trace' },
+  }) as HTMLInputElement;
+  checkbox.checked = isDeep;
+  checkbox.addEventListener('change', () => {
+    setTraceDepth(checkbox.checked ? 'deep' : 'normal');
+  });
+  const label = el('span', {
+    class: 'trace-depth-label',
+    text: isDeep ? 'Deep' : 'Normal',
+  });
+  const help = el('span', {
+    class: 'trace-depth-help',
+    attrs: {
+      title: isDeep
+        ? 'Deep: primary files preloaded; Grep enabled; multi-turn ask.'
+        : 'Normal: diff hunks only; no tools; single-turn ask.',
+    },
+    text: '?',
+  });
+  return el('label', {
+    class: `trace-depth-toggle${isDeep ? ' is-deep' : ''}`,
+    children: [
+      el('span', { class: 'trace-depth-caption', text: 'trace' }),
+      checkbox,
+      label,
+      help,
     ],
   });
 }
@@ -304,6 +345,12 @@ function openExternal(url: string): void {
   vscode.postMessage({ type: 'openExternal', url });
 }
 
+function setTraceDepth(depth: TraceDepth): void {
+  snapshot = { ...snapshot, traceDepth: depth };
+  vscode.postMessage({ type: 'setTraceDepth', traceDepth: depth });
+  render();
+}
+
 // ---------- styles ----------
 
 function installStyles(): void {
@@ -357,6 +404,18 @@ function installStyles(): void {
     .perspective-title { font-weight: 500; font-size: 0.85rem; line-height: 1.3; word-break: break-word; flex: 1; min-width: 0; }
     .perspective-outcome { margin: 0; font-size: 0.8rem; line-height: 1.45; word-break: break-word; overflow-wrap: anywhere; opacity: 0.9; }
     .perspective-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.1rem; }
+
+    /* trace-depth toggle */
+    .perspectives-header { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+    .trace-depth-toggle { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.72rem; opacity: 0.85; cursor: pointer; user-select: none; }
+    .trace-depth-toggle input[type='checkbox'] { appearance: none; width: 26px; height: 14px; border-radius: 999px; background: var(--vscode-input-background, #333); border: 1px solid var(--vscode-checkbox-border, #555); position: relative; cursor: pointer; transition: background 120ms ease; margin: 0; }
+    .trace-depth-toggle input[type='checkbox']::after { content: ''; position: absolute; top: 1px; left: 1px; width: 10px; height: 10px; border-radius: 50%; background: var(--vscode-checkbox-foreground, #ccc); transition: transform 120ms ease; }
+    .trace-depth-toggle input[type='checkbox']:checked { background: var(--vscode-button-background, #0078d4); }
+    .trace-depth-toggle input[type='checkbox']:checked::after { transform: translateX(12px); background: var(--vscode-button-foreground, #fff); }
+    .trace-depth-toggle input[type='checkbox']:focus-visible { outline: 1px solid var(--vscode-focusBorder, #0090f1); outline-offset: 2px; }
+    .trace-depth-caption { font-size: 0.62rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em; }
+    .trace-depth-label { min-width: 3.2em; font-variant-numeric: tabular-nums; }
+    .trace-depth-help { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--vscode-descriptionForeground, #888); font-size: 0.6rem; opacity: 0.6; cursor: help; }
 
     /* chips */
     .chip { display: inline-flex; align-items: center; padding: 0.05rem 0.45rem; border-radius: 999px; font-size: 0.62rem; letter-spacing: 0.04em; text-transform: uppercase; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); white-space: nowrap; }

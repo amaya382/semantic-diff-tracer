@@ -185,11 +185,12 @@ All commands live under the `Semantic Diff Tracer:` prefix in the Command Palett
 
 ### Pipeline
 
-| Setting                 | Default | Description                                                                                                                            |
-| ----------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `sdt.defaultBaseBranch` | `main`  | Base branch used by `Review Current Branch`                                                                                            |
-| `sdt.language`          | `en`    | Free-form language hint appended to every LLM prompt (`en`, `ja`, `zh`, `Español`, …). Affects summaries, flow narratives, Q&A answers |
-| `sdt.flowMaxTurns`      | `20`    | Cap on agent turns for flow planning and refinement. Adapters that don't run an agentic loop ignore this                               |
+| Setting                 | Default  | Description                                                                                                                                                                 |
+| ----------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sdt.defaultBaseBranch` | `main`   | Base branch used by `Review Current Branch`                                                                                                                                 |
+| `sdt.language`          | `en`     | Free-form language hint appended to every LLM prompt (`en`, `ja`, `zh`, `Español`, …). Affects summaries, flow narratives, Q&A answers                                      |
+| `sdt.flowMaxTurns`      | `20`     | Cap on agent turns for flow planning and refinement. Ignored when `sdt.traceDepth` is `normal` (that mode always runs single-turn)                                          |
+| `sdt.traceDepth`        | `normal` | `normal` sends only the diff hunks to Summary / Flow asks and runs a single-turn ask with no tools; `deep` also preloads the primary files and enables Grep. Toggle from the Perspectives view header |
 
 ### LLM backend — Claude adapter
 
@@ -234,6 +235,7 @@ Env vars (the `SDT_CLAUDE_*` entries belong to the Claude adapter — the only L
 | `SDT_CLAUDE_MODEL`          | `sonnet` / `opus` / `haiku` / `inherit` / a full model id (default: SDK default) |
 | `SDT_CLAUDE_EFFORT`         | `low` / `medium` / `high` / `max` (default: SDK default)                         |
 | `SDT_CLAUDE_EXECUTABLE`     | Absolute path to the `claude` CLI (default: resolved from `PATH`)                |
+| `SDT_TRACE_DEPTH`           | `normal` (default) or `deep` — initial trace depth; toggle live with `d` at the perspective screen |
 | `GITHUB_TOKEN` / `GH_TOKEN` | GitHub credential (VSCode's auth provider isn't available in a terminal)         |
 
 ## 🤖 Claude Code skill: `trace-diff`
@@ -248,12 +250,15 @@ Once installed as `~/.claude/skills/trace-diff/`, run the bundled binary directl
 
 ```bash
 node ~/.claude/skills/trace-diff/bin/render.mjs \
-  <URL | owner/repo#N | #N | branch> [-o out.html] [--no-mermaid-cdn]
+  <URL | owner/repo#N | #N | branch> \
+  [-o out.html] [--no-mermaid-cdn] [--trace-depth normal|deep]
 ```
+
+`--trace-depth` picks how much source the LLM sees per perspective. `normal` (default) sends only the diff hunks and runs a single-turn ask with no tools; `deep` also preloads the primary files and enables Grep.
 
 Or ask Claude Code to invoke the skill by describing the task ("render this PR as an HTML report", "trace-diff で PR 見せて"). SKILL.md carries the trigger phrasing.
 
-The binary prints the absolute path of the written HTML on stdout — surface that back to the user. It reads the same environment as the TUI (`SDT_LANGUAGE`, `SDT_CLAUDE_MODEL`, `SDT_CLAUDE_EXECUTABLE`, `SDT_FLOW_MAX_TURNS`, `GITHUB_TOKEN` / `GH_TOKEN`).
+The binary prints the absolute path of the written HTML on stdout — surface that back to the user. It reads the same environment as the TUI (`SDT_LANGUAGE`, `SDT_CLAUDE_MODEL`, `SDT_CLAUDE_EXECUTABLE`, `SDT_FLOW_MAX_TURNS`, `SDT_TRACE_DEPTH`, `GITHUB_TOKEN` / `GH_TOKEN`).
 
 ### Offline / airtight mode
 

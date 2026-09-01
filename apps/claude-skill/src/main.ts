@@ -4,7 +4,8 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { PrRef } from '@semantic-diff-tracer/core';
+import type { PrRef, TraceDepth } from '@semantic-diff-tracer/core';
+import { DEFAULT_TRACE_DEPTH, parseTraceDepth } from '@semantic-diff-tracer/core';
 import { ensureCheckout, GitDiffAdapter } from '@semantic-diff-tracer/diff-git';
 import { buildSkillDeps, resolveInput } from './boot.js';
 import { runPipeline } from './pipeline.js';
@@ -14,11 +15,17 @@ interface ParsedArgs {
   input: string;
   outPath?: string;
   noMermaidCdn: boolean;
+  traceDepth: TraceDepth;
   help: boolean;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const out: ParsedArgs = { input: '', noMermaidCdn: false, help: false };
+  const out: ParsedArgs = {
+    input: '',
+    noMermaidCdn: false,
+    traceDepth: parseTraceDepth(process.env['SDT_TRACE_DEPTH']),
+    help: false,
+  };
   const positional: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
@@ -28,6 +35,13 @@ function parseArgs(argv: string[]): ParsedArgs {
       if (v) out.outPath = v;
     }
     else if (a === '--no-mermaid-cdn') out.noMermaidCdn = true;
+    else if (a === '--trace-depth') {
+      const v = argv[++i];
+      if (v) out.traceDepth = parseTraceDepth(v);
+    }
+    else if (a.startsWith('--trace-depth=')) {
+      out.traceDepth = parseTraceDepth(a.slice('--trace-depth='.length));
+    }
     else positional.push(a);
   }
   out.input = positional[0] ?? '';
@@ -39,13 +53,19 @@ function usage(): string {
 
 Usage:
   trace-diff <URL | owner/repo#N | #N | branch> [-o out.html] [--no-mermaid-cdn]
+              [--trace-depth normal|deep]
 
 Options:
-  -o, --out <path>       Output file path (default: ./sdt-report-<slug>.html)
-  --no-mermaid-cdn       Skip the Mermaid CDN <script>; visuals stay as source
+  -o, --out <path>            Output file path (default: ./sdt-report-<slug>.html)
+  --no-mermaid-cdn            Skip the Mermaid CDN <script>; visuals stay as source
+  --trace-depth normal|deep   How much source the LLM sees per perspective.
+                              normal (default) sends only the diff hunks and
+                              runs a single-turn ask with no tools; deep also
+                              preloads full/sliced files and enables Grep.
 
 Environment (same as the TUI):
   SDT_LANGUAGE, SDT_CLAUDE_MODEL, SDT_CLAUDE_EXECUTABLE, SDT_FLOW_MAX_TURNS,
+  SDT_TRACE_DEPTH (normal|deep, default: ${DEFAULT_TRACE_DEPTH}),
   GITHUB_TOKEN / GH_TOKEN
 `;
 }
@@ -73,7 +93,7 @@ async function main(): Promise<void> {
     const checkout = await ensureCheckout(ref, { repoCwd: cwd, logger: deps.logger });
     deps.diff = new GitDiffAdapter({ cwd: checkout.worktreePath });
   }
-  const result = await runPipeline(deps, ref);
+  const result = await runPipeline(deps, ref, { traceDepth: args.traceDepth });
   const html = renderReport({
     meta: result.meta,
     perspectives: result.perspectives,

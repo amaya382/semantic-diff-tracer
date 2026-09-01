@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import type { PerspectiveSet, PrRef } from '@semantic-diff-tracer/core';
+import type { PerspectiveSet, PrRef, TraceDepth } from '@semantic-diff-tracer/core';
+import { DEFAULT_TRACE_DEPTH } from '@semantic-diff-tracer/core';
 import { embedJson, escapeHtml, randomNonce } from '../panels/html.js';
 
 /**
@@ -18,33 +19,56 @@ export interface SidePanelSnapshot {
   loadingMessage?: string;
   /** Epoch ms; webview ticks an elapsed counter off this. */
   loadingStartedAt?: number;
+  /** Current trace depth (extension-owned; toggled from the view header). */
+  traceDepth?: TraceDepth;
+}
+
+export interface SidePanelCallbacks {
+  /** Fires when the reader flips the trace-depth toggle in the view header. */
+  onTraceDepthChange?(depth: TraceDepth): void;
 }
 
 export class SidePanelProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
-  private snapshot: SidePanelSnapshot = { state: 'idle' };
+  private snapshot: SidePanelSnapshot = { state: 'idle', traceDepth: DEFAULT_TRACE_DEPTH };
+  private callbacks: SidePanelCallbacks = {};
 
   constructor(private readonly context: vscode.ExtensionContext) {}
 
+  setCallbacks(callbacks: SidePanelCallbacks): void {
+    this.callbacks = callbacks;
+  }
+
+  setTraceDepth(depth: TraceDepth): void {
+    this.snapshot = { ...this.snapshot, traceDepth: depth };
+    this.publish();
+  }
+
   showNoWorkspace(): void {
-    this.snapshot = { state: 'no-workspace' };
+    this.snapshot = { state: 'no-workspace', traceDepth: this.snapshot.traceDepth ?? DEFAULT_TRACE_DEPTH };
     this.publish();
   }
 
   showIdle(): void {
-    this.snapshot = { state: 'idle' };
+    this.snapshot = { state: 'idle', traceDepth: this.snapshot.traceDepth ?? DEFAULT_TRACE_DEPTH };
     this.publish();
   }
 
   showLoading(ref: PrRef, meta: { title: string; url?: string }, message?: string): void {
-    const next: SidePanelSnapshot = { state: 'loading', ref, meta, loadingStartedAt: Date.now() };
+    const next: SidePanelSnapshot = {
+      state: 'loading',
+      ref,
+      meta,
+      loadingStartedAt: Date.now(),
+      traceDepth: this.snapshot.traceDepth ?? DEFAULT_TRACE_DEPTH,
+    };
     if (message) next.loadingMessage = message;
     this.snapshot = next;
     this.publish();
   }
 
   showReady(ref: PrRef, meta: { title: string; url?: string }, set: PerspectiveSet): void {
-    this.snapshot = { state: 'ready', ref, meta, set };
+    this.snapshot = { state: 'ready', ref, meta, set, traceDepth: this.snapshot.traceDepth ?? DEFAULT_TRACE_DEPTH };
     this.publish();
   }
 
@@ -54,7 +78,7 @@ export class SidePanelProvider implements vscode.WebviewViewProvider {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'dist')],
     };
-    view.webview.onDidReceiveMessage((msg: { type?: string; command?: string; perspectiveId?: string; url?: string }) => {
+    view.webview.onDidReceiveMessage((msg: { type?: string; command?: string; perspectiveId?: string; url?: string; traceDepth?: string }) => {
       if (msg.type === 'runCommand' && typeof msg.command === 'string') {
         void vscode.commands.executeCommand(
           msg.command,
@@ -63,6 +87,9 @@ export class SidePanelProvider implements vscode.WebviewViewProvider {
       }
       if (msg.type === 'openExternal' && typeof msg.url === 'string') {
         void vscode.env.openExternal(vscode.Uri.parse(msg.url));
+      }
+      if (msg.type === 'setTraceDepth' && (msg.traceDepth === 'normal' || msg.traceDepth === 'deep')) {
+        this.callbacks.onTraceDepthChange?.(msg.traceDepth);
       }
     });
     view.onDidDispose(() => {

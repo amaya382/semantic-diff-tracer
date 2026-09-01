@@ -141,7 +141,16 @@
           "default": 5,
           "minimum": 1,
           "maximum": 200,
-          "description": "Cap on agent turns for Flow planning and refinement. The default 5 fits the preloaded-code approach — the primary source is embedded in the prompt, so the model rarely needs to Grep. Raise it only when a very large perspective still needs on-the-fly exploration."
+          "description": "Cap on agent turns for Flow planning and refinement. The default 5 fits the preloaded-code approach — the primary source is embedded in the prompt, so the model rarely needs to Grep. Raise it only when a very large perspective still needs on-the-fly exploration. Ignored when trace depth is 'normal' (that mode always runs single-turn)."
+        },
+        "sdt.traceDepth": {
+          "type": "string",
+          "enum": [
+            "normal",
+            "deep"
+          ],
+          "default": "normal",
+          "markdownDescription": "How much source each perspective's Summary and Trace ask gets to see. `normal` sends only the diff hunks and runs a single-turn ask with no tools — fast and cheap. `deep` also preloads the primary files (full or hunk-sliced) and enables Grep. The toggle in the Perspectives view header overrides this setting for the current session."
         },
         "sdt.claudeExecutable": {
           "type": "string",

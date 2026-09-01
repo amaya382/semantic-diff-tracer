@@ -10,9 +10,14 @@ import type { UnifiedDiff } from '../domain/diff.js';
 import type { PerspectiveDraft } from '../domain/perspective.js';
 import type { PerspectiveSummary, SummaryPayload } from '../domain/summary.js';
 import { sanitizeSummaryVisuals } from '../domain/summary.js';
+import type { TraceDepth } from '../domain/trace-depth.js';
+import { DEFAULT_TRACE_DEPTH } from '../domain/trace-depth.js';
 import { SUMMARY_SYSTEM_PROMPT, buildSummaryUserMessage } from '../prompts/summary.js';
 import { parseJsonStrict } from './json-parse.js';
-import { buildPerspectiveCodeContext } from './perspective-code-context.js';
+import {
+  buildHunkOnlyCodeContext,
+  buildPerspectiveCodeContext,
+} from './perspective-code-context.js';
 
 export interface SummarizeDeps {
   llm: LlmProvider;
@@ -27,6 +32,12 @@ export interface SummarizeArgs {
   perspective: PerspectiveDraft;
   /** Pre-fetched diff — pass through when the caller already has one to avoid a redundant getDiff. */
   diff?: UnifiedDiff;
+  /**
+   * How much source the ask gets to see. `normal` (default) sends only the
+   * diff hunks, disables tools, and caps the ask at one turn. `deep` loads
+   * full/sliced file bodies and lets the model run Grep.
+   */
+  traceDepth?: TraceDepth;
 }
 
 /**
@@ -53,16 +64,16 @@ export async function summarize(
   const cachedSummary = await deps.sessionStore.get(summaryKey);
 
   const diff = args.diff ?? (await deps.diff.getDiff(args.ref));
-  const codeContext = await buildPerspectiveCodeContext(
-    args.ref,
-    args.perspective,
-    diff,
-    deps.diff,
-  );
+  const traceDepth = args.traceDepth ?? DEFAULT_TRACE_DEPTH;
+  const codeContext = traceDepth === 'deep'
+    ? await buildPerspectiveCodeContext(args.ref, args.perspective, diff, deps.diff)
+    : buildHunkOnlyCodeContext(args.perspective, diff);
   log.info('summary', 'code context ready', {
     perspectiveId: args.perspective.id,
+    traceDepth,
     fullFiles: codeContext.fullFiles.length,
     slicedFiles: codeContext.slicedFiles.length,
+    hunkOnlyFiles: codeContext.hunkOnlyFiles.length,
     bytes: codeContext.bytes,
   });
   const user = buildSummaryUserMessage(args.perspective, codeContext.text);
@@ -84,11 +95,15 @@ export async function summarize(
     label = 'fresh';
   }
 
+  const askOptions =
+    traceDepth === 'normal'
+      ? { tools: [] as string[], maxTurns: 1 }
+      : { tools: ['Grep'] };
   const { text } = await log.time('summary', `llm.ask (${label})`, () =>
     conversation.ask({
       system: SUMMARY_SYSTEM_PROMPT,
       user,
-      tools: ['Grep'],
+      ...askOptions,
       ...(deps.language ? { language: deps.language } : {}),
     }),
   );

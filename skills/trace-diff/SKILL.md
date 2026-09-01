@@ -29,7 +29,8 @@ Emit a single-file HTML report for a PR using the semantic-diff-tracer pipeline.
 The skill ships a self-contained ESM bundle next to this file. Invoke it with the absolute path so it works regardless of the caller's cwd:
 
 ```bash
-node "${SKILL_DIR}/bin/render.mjs" <URL | owner/repo#N | #N | branch> [-o out.html] [--no-mermaid-cdn]
+node "${SKILL_DIR}/bin/render.mjs" <URL | owner/repo#N | #N | branch> \
+  [-o out.html] [--no-mermaid-cdn] [--trace-depth normal|deep]
 ```
 
 Substitute `${SKILL_DIR}` with the directory containing this SKILL.md (typically `~/.claude/skills/trace-diff/` after `npx skills add amaya382/semantic-diff-tracer`). The bundle needs no `node_modules` — the whole skill directory is portable.
@@ -37,15 +38,18 @@ Substitute `${SKILL_DIR}` with the directory containing this SKILL.md (typically
 Examples:
 
 ```bash
-# GitHub PR URL
+# GitHub PR URL — normal depth (default; single-turn per perspective, diff-hunk only)
 node ~/.claude/skills/trace-diff/bin/render.mjs https://github.com/octo/repo/pull/42
 
 # owner/repo#N shorthand
 node ~/.claude/skills/trace-diff/bin/render.mjs octo/repo#42
 
-# Local branch reviewed against `main`
-node ~/.claude/skills/trace-diff/bin/render.mjs my-feature-branch -o my-feature.html
+# Local branch reviewed against `main`, deeper trace (loads primary files, enables Grep)
+node ~/.claude/skills/trace-diff/bin/render.mjs my-feature-branch \
+  --trace-depth deep -o my-feature.html
 ```
+
+`--trace-depth` picks how much source the LLM sees when building each perspective. `normal` (default) sends only the diff hunks and runs a single-turn ask with no tools — fast and cheap. `deep` preloads the primary files (full or hunk-sliced), enables Grep, and lets the flow-planning ask take multiple agent turns.
 
 On success the binary prints the absolute path of the generated HTML on stdout. Surface that path back to the user.
 
@@ -56,7 +60,8 @@ On success the binary prints the absolute path of the generated HTML on stdout. 
 | `SDT_LANGUAGE`          | Language hint appended to every LLM prompt (default `en`).                 |
 | `SDT_CLAUDE_MODEL`      | `sonnet` / `opus` / `haiku` / `inherit` / full id (default: SDK default).  |
 | `SDT_CLAUDE_EXECUTABLE` | Absolute path to `claude` CLI (default: PATH).                             |
-| `SDT_FLOW_MAX_TURNS`    | Cap on agent turns per flow plan (default: 5).                             |
+| `SDT_FLOW_MAX_TURNS`    | Cap on agent turns per flow plan (default: 5). `--trace-depth normal` overrides this to 1. |
+| `SDT_TRACE_DEPTH`       | `normal` (default) or `deep`; the `--trace-depth` flag overrides this.     |
 | `GITHUB_TOKEN`          | GitHub credential; alternative: `GH_TOKEN` or a logged-in `gh` CLI.        |
 
 ## What the report contains
