@@ -4,8 +4,10 @@ import type {
   PerspectiveSet,
   PrRef,
   QaSection,
+  TraceDepth,
   UnifiedDiff,
 } from '@semantic-diff-tracer/core';
+import { DEFAULT_TRACE_DEPTH } from '@semantic-diff-tracer/core';
 import type { LoadingTask } from './panels/perspective-panel.js';
 
 /** Background work in flight for one perspective, mirrored into the webview. */
@@ -48,6 +50,13 @@ export interface ExtensionState {
   /** per-perspective ordered Q&A sections. */
   qa: Map<string, QaSection[]>;
   githubToken: string | undefined;
+  /**
+   * Depth for the next Summary / Trace ask. Seeded from `sdt.traceDepth` when
+   * the extension activates, overridden at runtime by the Perspectives-view
+   * toggle. Only affects asks fired after the toggle — already-cached summaries
+   * / flows keep whatever depth they were built at.
+   */
+  traceDepth: TraceDepth;
 }
 
 export function makeInitialState(): ExtensionState {
@@ -64,5 +73,6 @@ export function makeInitialState(): ExtensionState {
     loading: new Map(),
     qa: new Map(),
     githubToken: undefined,
+    traceDepth: DEFAULT_TRACE_DEPTH,
   };
 }

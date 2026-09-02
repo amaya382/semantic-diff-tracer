@@ -4,3 +4,4 @@ export * from './perspective.js';
 export * from './summary.js';
 export * from './flow.js';
 export * from './qa.js';
+export * from './trace-depth.js';

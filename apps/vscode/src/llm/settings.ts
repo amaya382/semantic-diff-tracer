@@ -6,7 +6,8 @@ import {
   resolveClaudeExecutable,
 } from '@semantic-diff-tracer/llm-claude';
 import type { ClaudeAdapterOptions } from '@semantic-diff-tracer/llm-claude';
-import type { Conversation, LlmProvider, LoggerPort } from '@semantic-diff-tracer/core';
+import type { Conversation, LlmProvider, LoggerPort, TraceDepth } from '@semantic-diff-tracer/core';
+import { parseTraceDepth } from '@semantic-diff-tracer/core';
 
 const MISSING_EXECUTABLE_MESSAGE =
   'Semantic Diff Tracer: the claude CLI was not found. Install Claude Code, or set ' +
@@ -101,4 +102,13 @@ export function readDefaultBaseBranch(): string {
 export function readFlowMaxTurns(): number {
   const config = vscode.workspace.getConfiguration('sdt');
   return clampFlowMaxTurns(config.get<number>('flowMaxTurns', 5));
+}
+
+/**
+ * Read the initial trace depth from settings. The Perspectives view header
+ * toggle overrides this at runtime, so this only seeds the first value.
+ */
+export function readTraceDepth(): TraceDepth {
+  const config = vscode.workspace.getConfiguration('sdt');
+  return parseTraceDepth(config.get<string>('traceDepth', 'normal'));
 }

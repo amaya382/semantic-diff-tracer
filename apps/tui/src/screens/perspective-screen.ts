@@ -1,16 +1,23 @@
-import type { PerspectiveDraft, PrRef } from '@semantic-diff-tracer/core';
-import { extractPerspectives } from '@semantic-diff-tracer/core';
+import type { PerspectiveDraft, PrRef, TraceDepth } from '@semantic-diff-tracer/core';
+import { DEFAULT_TRACE_DEPTH, extractPerspectives } from '@semantic-diff-tracer/core';
 import type { TuiDeps } from '../boot.js';
 import { ask } from '../io/prompt.js';
 
+export interface PerspectiveChoice {
+  perspective: PerspectiveDraft;
+  traceDepth: TraceDepth;
+}
+
 /**
- * Runs perspective extraction and lets the user pick one by index. Returns the
- * chosen perspective or undefined on quit.
+ * Runs perspective extraction and lets the user pick one by index. `d` toggles
+ * the depth of the trace that the following summary/flow asks will run at.
+ * Returns the chosen perspective plus the toggled depth, or undefined on quit.
  */
 export async function runPerspectiveScreen(
   deps: TuiDeps,
   ref: PrRef,
-): Promise<PerspectiveDraft | undefined> {
+  initialTraceDepth: TraceDepth = DEFAULT_TRACE_DEPTH,
+): Promise<PerspectiveChoice | undefined> {
   console.log('Extracting perspectives…');
   const diff = await deps.diff.getDiff(ref);
   const meta =
@@ -40,12 +47,23 @@ export async function runPerspectiveScreen(
     console.log('No perspectives extracted.');
     return undefined;
   }
-  const answer = (await ask('\nPick a perspective (number, q to quit): ')).trim();
-  if (!answer || answer === 'q') return undefined;
-  const idx = Number(answer) - 1;
-  if (!Number.isInteger(idx) || idx < 0 || idx >= set.perspectives.length) {
-    console.log('Invalid choice.');
-    return undefined;
+  let traceDepth = initialTraceDepth;
+  while (true) {
+    const answer = (
+      await ask(
+        `\ntrace-depth=${traceDepth}. Pick a perspective (number, d to toggle depth, q to quit): `,
+      )
+    ).trim();
+    if (!answer || answer === 'q') return undefined;
+    if (answer === 'd') {
+      traceDepth = traceDepth === 'normal' ? 'deep' : 'normal';
+      continue;
+    }
+    const idx = Number(answer) - 1;
+    if (!Number.isInteger(idx) || idx < 0 || idx >= set.perspectives.length) {
+      console.log('Invalid choice.');
+      continue;
+    }
+    return { perspective: set.perspectives[idx]!, traceDepth };
   }
-  return set.perspectives[idx];
 }

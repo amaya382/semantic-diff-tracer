@@ -131,7 +131,26 @@ const FLOW_RESPONSE = JSON.stringify({
 });
 
 describe('planFlow', () => {
-  it('preloads code, uses Grep-only tools, and respects maxTurns', async () => {
+  it('deep mode preloads code, uses Grep-only tools, and respects maxTurns', async () => {
+    const store = new MemStore();
+    const capture: Capture = { asks: [], starts: 0, resumes: 0, getDiffCalls: 0 };
+    const llm = makeLlm(FLOW_RESPONSE, capture);
+    const diffPort = new RecorderDiff(diff(), {
+      'src/auth.ts': 'export function refresh() { return "ok"; }',
+    });
+    await planFlow(
+      { llm, diff: diffPort, sessionStore: store, maxTurns: 3 },
+      { ref: ref(), perspective: perspective(), traceDepth: 'deep' },
+    );
+    expect(capture.asks).toHaveLength(1);
+    const [ask] = capture.asks;
+    expect(ask?.tools).toEqual(['Grep']);
+    expect(ask?.maxTurns).toBe(3);
+    expect(ask?.user).toContain('src/auth.ts');
+    expect(ask?.user).toContain('export function refresh');
+  });
+
+  it('normal mode (default) sends only the diff hunk, disables tools, and caps at one turn', async () => {
     const store = new MemStore();
     const capture: Capture = { asks: [], starts: 0, resumes: 0, getDiffCalls: 0 };
     const llm = makeLlm(FLOW_RESPONSE, capture);
@@ -142,12 +161,11 @@ describe('planFlow', () => {
       { llm, diff: diffPort, sessionStore: store, maxTurns: 3 },
       { ref: ref(), perspective: perspective() },
     );
-    expect(capture.asks).toHaveLength(1);
     const [ask] = capture.asks;
-    expect(ask?.tools).toEqual(['Grep']);
-    expect(ask?.maxTurns).toBe(3);
-    expect(ask?.user).toContain('src/auth.ts');
-    expect(ask?.user).toContain('export function refresh');
+    expect(ask?.tools).toEqual([]);
+    expect(ask?.maxTurns).toBe(1);
+    expect(ask?.user).toContain('Diff hunks');
+    expect(ask?.user).not.toContain('export function refresh');
   });
 
   it('starts a fresh conversation instead of forking base/perspective', async () => {

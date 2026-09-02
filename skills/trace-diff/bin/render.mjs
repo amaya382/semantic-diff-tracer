@@ -128,225 +128,6 @@ import * as os2 from "node:os";
 import * as path4 from "node:path";
 import { fileURLToPath } from "node:url";
 
-// ../../packages/diff-git/dist/git.js
-import { spawn } from "node:child_process";
-import { isAbsolute, resolve } from "node:path";
-async function runGit(args, options) {
-  return new Promise((resolve4, reject) => {
-    const proc = spawn("git", args, { cwd: options.cwd });
-    const chunks = [];
-    const errChunks = [];
-    let size = 0;
-    const limit = options.maxBuffer ?? 32 * 1024 * 1024;
-    proc.stdout.on("data", (data) => {
-      size += data.length;
-      if (size > limit) {
-        proc.kill("SIGKILL");
-        reject(new Error(`git ${args[0]} output exceeded ${limit} bytes`));
-        return;
-      }
-      chunks.push(data);
-    });
-    proc.stderr.on("data", (data) => errChunks.push(data));
-    proc.on("error", reject);
-    proc.on("close", (code) => {
-      if (code === 0)
-        resolve4(Buffer.concat(chunks).toString("utf8"));
-      else
-        reject(new Error(`git ${args.join(" ")} exited ${code}: ${Buffer.concat(errChunks).toString("utf8")}`));
-    });
-  });
-}
-async function revParse(revision, cwd2) {
-  const out = await runGit(["rev-parse", revision], { cwd: cwd2 });
-  return out.trim();
-}
-async function mergeBase(a, b, cwd2) {
-  const out = await runGit(["merge-base", a, b], { cwd: cwd2 });
-  return out.trim();
-}
-async function diffRange(base, head, cwd2) {
-  return runGit(["diff", "--no-color", "--no-ext-diff", `${base}...${head}`], { cwd: cwd2 });
-}
-async function showBlob(sha, path5, cwd2) {
-  try {
-    return await runGit(["show", `${sha}:${path5}`], { cwd: cwd2 });
-  } catch {
-    return null;
-  }
-}
-async function commonGitDir(cwd2) {
-  const out = await runGit(["rev-parse", "--git-common-dir"], { cwd: cwd2 });
-  const raw = out.trim();
-  if (!raw)
-    throw new Error(`git rev-parse --git-common-dir returned empty in ${cwd2}`);
-  return isAbsolute(raw) ? raw : resolve(cwd2, raw);
-}
-async function hasCommit(sha, cwd2) {
-  try {
-    await runGit(["cat-file", "-e", `${sha}^{commit}`], { cwd: cwd2 });
-    return true;
-  } catch {
-    return false;
-  }
-}
-async function fetchRef(remoteOrUrl, refspec, cwd2) {
-  await runGit(["fetch", remoteOrUrl, refspec], { cwd: cwd2 });
-}
-async function listWorktrees(cwd2) {
-  const raw = await runGit(["worktree", "list", "--porcelain"], { cwd: cwd2 });
-  const trees = [];
-  let cur = {};
-  const flush = () => {
-    if (cur.path) {
-      const entry = {
-        path: cur.path,
-        head: cur.head ?? "",
-        isBare: cur.isBare === true
-      };
-      if (cur.branch)
-        entry.branch = cur.branch;
-      trees.push(entry);
-    }
-    cur = {};
-  };
-  for (const line of raw.split("\n")) {
-    if (!line.trim()) {
-      flush();
-      continue;
-    }
-    if (line.startsWith("worktree ")) {
-      flush();
-      cur.path = line.slice("worktree ".length).trim();
-    } else if (line.startsWith("HEAD ")) {
-      cur.head = line.slice("HEAD ".length).trim();
-    } else if (line.startsWith("branch ")) {
-      cur.branch = line.slice("branch refs/heads/".length).trim();
-    } else if (line === "bare") {
-      cur.isBare = true;
-    }
-  }
-  flush();
-  return trees;
-}
-async function worktreeAdd(path5, sha, cwd2) {
-  await runGit(["worktree", "add", "--detach", path5, sha], { cwd: cwd2 });
-}
-async function resetHardTo(sha, cwd2) {
-  await runGit(["reset", "--hard", sha], { cwd: cwd2 });
-}
-
-// ../../packages/diff-git/dist/parse-diff.js
-var FILE_HEADER = /^diff --git a\/(.+?) b\/(.+)$/;
-var HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/;
-function parseUnifiedDiff(text, baseSha, headSha) {
-  const lines = text.split("\n");
-  const files = [];
-  let current = null;
-  let currentHunk = null;
-  let renameFrom = null;
-  const finalizeHunk = () => {
-    if (current && currentHunk) {
-      current.hunks.push(currentHunk);
-      currentHunk = null;
-    }
-  };
-  const finalizeFile = () => {
-    finalizeHunk();
-    if (current)
-      files.push(current);
-    current = null;
-    renameFrom = null;
-  };
-  for (const line of lines) {
-    const headerMatch = line.match(FILE_HEADER);
-    if (headerMatch) {
-      finalizeFile();
-      const [, oldPath, newPath] = headerMatch;
-      current = {
-        path: newPath,
-        oldPath: oldPath === newPath ? void 0 : oldPath,
-        status: "modified",
-        additions: 0,
-        deletions: 0,
-        hunks: []
-      };
-      if (oldPath === newPath)
-        delete current.oldPath;
-      continue;
-    }
-    if (!current)
-      continue;
-    if (line.startsWith("new file mode"))
-      current.status = "added";
-    else if (line.startsWith("deleted file mode"))
-      current.status = "removed";
-    else if (line.startsWith("rename from ")) {
-      renameFrom = line.slice("rename from ".length);
-      current.status = "renamed";
-    } else if (line.startsWith("rename to ")) {
-      if (renameFrom)
-        current.oldPath = renameFrom;
-    }
-    const hunkMatch = line.match(HUNK_HEADER);
-    if (hunkMatch) {
-      finalizeHunk();
-      const [, oldStart, oldLines, newStart, newLines, header] = hunkMatch;
-      currentHunk = {
-        oldStart: Number(oldStart),
-        oldLines: oldLines ? Number(oldLines) : 1,
-        newStart: Number(newStart),
-        newLines: newLines ? Number(newLines) : 1,
-        header: (header ?? "").trim(),
-        body: ""
-      };
-      continue;
-    }
-    if (currentHunk && (line.startsWith("+") || line.startsWith("-") || line.startsWith(" "))) {
-      currentHunk.body += (currentHunk.body ? "\n" : "") + line;
-      if (line.startsWith("+") && !line.startsWith("+++"))
-        current.additions++;
-      if (line.startsWith("-") && !line.startsWith("---"))
-        current.deletions++;
-    }
-  }
-  finalizeFile();
-  return { baseSha, headSha, files };
-}
-
-// ../../packages/diff-git/dist/adapter.js
-var GitDiffAdapter = class {
-  options;
-  constructor(options) {
-    this.options = options;
-  }
-  async getDiff(ref) {
-    const raw = await diffRange(ref.baseSha, ref.headSha, this.options.cwd);
-    return parseUnifiedDiff(raw, ref.baseSha, ref.headSha);
-  }
-  async readFileAtSha(sha, path5) {
-    return showBlob(sha, path5, this.options.cwd);
-  }
-};
-
-// ../../packages/diff-git/dist/local-ref.js
-async function resolveLocalRef(args) {
-  const headRef = args.head ?? "HEAD";
-  const headSha = await revParse(headRef, args.cwd);
-  const baseSha = await mergeBase(args.base, headRef, args.cwd);
-  return {
-    kind: "local",
-    baseSha,
-    headSha,
-    baseRef: args.base,
-    headRef
-  };
-}
-
-// ../../packages/diff-git/dist/ensure-checkout.js
-import { promises as fs } from "node:fs";
-import * as path from "node:path";
-
 // ../../packages/core/dist/domain/pr-ref.js
 function prRefKey(ref) {
   if (ref.kind === "github") {
@@ -435,6 +216,17 @@ function sanitizeSummaryVisuals(raw) {
     }
   }
   return out;
+}
+
+// ../../packages/core/dist/domain/trace-depth.js
+var DEFAULT_TRACE_DEPTH = "normal";
+function parseTraceDepth(value) {
+  if (typeof value !== "string")
+    return DEFAULT_TRACE_DEPTH;
+  const lowered = value.trim().toLowerCase();
+  if (lowered === "normal" || lowered === "deep")
+    return lowered;
+  return DEFAULT_TRACE_DEPTH;
 }
 
 // ../../packages/core/dist/ports/session-store.js
@@ -755,6 +547,7 @@ async function buildPerspectiveCodeContext(ref, perspective, diff, diffPort, opt
   const sections = [];
   const fullFiles = [];
   const slicedFiles = [];
+  const hunkOnlyFiles = [];
   let usedBytes = 0;
   for (const path5 of primaryFiles) {
     const head = await diffPort.readFileAtSha(ref.headSha, path5);
@@ -762,7 +555,7 @@ async function buildPerspectiveCodeContext(ref, perspective, diff, diffPort, opt
       const fallback = buildHunkFallbackSection(path5, primaryRefs, diff);
       if (fallback) {
         sections.push(fallback);
-        slicedFiles.push(path5);
+        hunkOnlyFiles.push(path5);
       }
       continue;
     }
@@ -780,12 +573,38 @@ async function buildPerspectiveCodeContext(ref, perspective, diff, diffPort, opt
     }
   }
   if (sections.length === 0) {
-    return { text: "", fullFiles, slicedFiles, bytes: 0 };
+    return { text: "", fullFiles, slicedFiles, hunkOnlyFiles, bytes: 0 };
   }
   const text = `## Code (post-merge)
 
 ${sections.join("\n\n")}`;
-  return { text, fullFiles, slicedFiles, bytes: Buffer.byteLength(text, "utf8") };
+  return { text, fullFiles, slicedFiles, hunkOnlyFiles, bytes: Buffer.byteLength(text, "utf8") };
+}
+function buildHunkOnlyCodeContext(perspective, diff) {
+  const primaryRefs = perspective.hunkRefs.filter((r) => (r.role ?? "primary") === "primary");
+  const primaryFiles = uniquePrimaryFiles(primaryRefs);
+  const sections = [];
+  const hunkOnlyFiles = [];
+  for (const path5 of primaryFiles) {
+    const section = buildHunkFallbackSection(path5, primaryRefs, diff);
+    if (section) {
+      sections.push(section);
+      hunkOnlyFiles.push(path5);
+    }
+  }
+  if (sections.length === 0) {
+    return { text: "", fullFiles: [], slicedFiles: [], hunkOnlyFiles, bytes: 0 };
+  }
+  const text = `## Diff hunks (only source available)
+
+${sections.join("\n\n")}`;
+  return {
+    text,
+    fullFiles: [],
+    slicedFiles: [],
+    hunkOnlyFiles,
+    bytes: Buffer.byteLength(text, "utf8")
+  };
 }
 function uniquePrimaryFiles(refs) {
   const seen = /* @__PURE__ */ new Set();
@@ -986,11 +805,14 @@ async function summarize(deps, args) {
   });
   const cachedSummary = await deps.sessionStore.get(summaryKey);
   const diff = args.diff ?? await deps.diff.getDiff(args.ref);
-  const codeContext = await buildPerspectiveCodeContext(args.ref, args.perspective, diff, deps.diff);
+  const traceDepth = args.traceDepth ?? DEFAULT_TRACE_DEPTH;
+  const codeContext = traceDepth === "deep" ? await buildPerspectiveCodeContext(args.ref, args.perspective, diff, deps.diff) : buildHunkOnlyCodeContext(args.perspective, diff);
   log.info("summary", "code context ready", {
     perspectiveId: args.perspective.id,
+    traceDepth,
     fullFiles: codeContext.fullFiles.length,
     slicedFiles: codeContext.slicedFiles.length,
+    hunkOnlyFiles: codeContext.hunkOnlyFiles.length,
     bytes: codeContext.bytes
   });
   const user = buildSummaryUserMessage(args.perspective, codeContext.text);
@@ -1010,10 +832,11 @@ async function summarize(deps, args) {
     conversation = deps.llm.startConversation();
     label = "fresh";
   }
+  const askOptions = traceDepth === "normal" ? { tools: [], maxTurns: 1 } : { tools: ["Grep"] };
   const { text } = await log.time("summary", `llm.ask (${label})`, () => conversation.ask({
     system: SUMMARY_SYSTEM_PROMPT,
     user,
-    tools: ["Grep"],
+    ...askOptions,
     ...deps.language ? { language: deps.language } : {}
   }));
   await deps.sessionStore.set(summaryKey, conversation.id);
@@ -1538,23 +1361,29 @@ async function planFlow(deps, args) {
   const log = deps.logger ?? nullLogger;
   const key = prRefKey(args.ref);
   const unified = args.diff ?? await deps.diff.getDiff(args.ref);
-  const codeContext = await buildPerspectiveCodeContext(args.ref, args.perspective, unified, deps.diff);
+  const traceDepth = args.traceDepth ?? DEFAULT_TRACE_DEPTH;
+  const codeContext = traceDepth === "deep" ? await buildPerspectiveCodeContext(args.ref, args.perspective, unified, deps.diff) : buildHunkOnlyCodeContext(args.perspective, unified);
   log.info("flow", "planFlow ask", {
     perspectiveId: args.perspective.id,
     kind: args.perspective.kind,
     traceMode: traceModeFor(args.perspective.kind),
+    traceDepth,
     fullFiles: codeContext.fullFiles.length,
     slicedFiles: codeContext.slicedFiles.length,
+    hunkOnlyFiles: codeContext.hunkOnlyFiles.length,
     codeContextBytes: codeContext.bytes
   });
   const user = buildFlowUserMessage(args.perspective, codeContext.text);
   const conversation = deps.llm.startConversation();
+  const askOptions = traceDepth === "normal" ? { tools: [], maxTurns: 1 } : {
+    tools: ["Grep"],
+    ...deps.maxTurns ? { maxTurns: deps.maxTurns } : {}
+  };
   const { text } = await log.time("flow", "llm.ask (planFlow)", () => conversation.ask({
     system: buildFlowSystemPrompt(args.perspective.kind),
     user,
-    tools: ["Grep"],
-    ...deps.language ? { language: deps.language } : {},
-    ...deps.maxTurns ? { maxTurns: deps.maxTurns } : {}
+    ...askOptions,
+    ...deps.language ? { language: deps.language } : {}
   }));
   await deps.sessionStore.set(sessionKey(key, { kind: "flow", perspectiveId: args.perspective.id }), conversation.id);
   const raw = parseJsonStrict(text);
@@ -1579,7 +1408,224 @@ async function planFlow(deps, args) {
   return flow;
 }
 
+// ../../packages/diff-git/dist/git.js
+import { spawn } from "node:child_process";
+import { isAbsolute, resolve } from "node:path";
+async function runGit(args, options) {
+  return new Promise((resolve4, reject) => {
+    const proc = spawn("git", args, { cwd: options.cwd });
+    const chunks = [];
+    const errChunks = [];
+    let size = 0;
+    const limit = options.maxBuffer ?? 32 * 1024 * 1024;
+    proc.stdout.on("data", (data) => {
+      size += data.length;
+      if (size > limit) {
+        proc.kill("SIGKILL");
+        reject(new Error(`git ${args[0]} output exceeded ${limit} bytes`));
+        return;
+      }
+      chunks.push(data);
+    });
+    proc.stderr.on("data", (data) => errChunks.push(data));
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0)
+        resolve4(Buffer.concat(chunks).toString("utf8"));
+      else
+        reject(new Error(`git ${args.join(" ")} exited ${code}: ${Buffer.concat(errChunks).toString("utf8")}`));
+    });
+  });
+}
+async function revParse(revision, cwd2) {
+  const out = await runGit(["rev-parse", revision], { cwd: cwd2 });
+  return out.trim();
+}
+async function mergeBase(a, b, cwd2) {
+  const out = await runGit(["merge-base", a, b], { cwd: cwd2 });
+  return out.trim();
+}
+async function diffRange(base, head, cwd2) {
+  return runGit(["diff", "--no-color", "--no-ext-diff", `${base}...${head}`], { cwd: cwd2 });
+}
+async function showBlob(sha, path5, cwd2) {
+  try {
+    return await runGit(["show", `${sha}:${path5}`], { cwd: cwd2 });
+  } catch {
+    return null;
+  }
+}
+async function commonGitDir(cwd2) {
+  const out = await runGit(["rev-parse", "--git-common-dir"], { cwd: cwd2 });
+  const raw = out.trim();
+  if (!raw)
+    throw new Error(`git rev-parse --git-common-dir returned empty in ${cwd2}`);
+  return isAbsolute(raw) ? raw : resolve(cwd2, raw);
+}
+async function hasCommit(sha, cwd2) {
+  try {
+    await runGit(["cat-file", "-e", `${sha}^{commit}`], { cwd: cwd2 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function fetchRef(remoteOrUrl, refspec, cwd2) {
+  await runGit(["fetch", remoteOrUrl, refspec], { cwd: cwd2 });
+}
+async function listWorktrees(cwd2) {
+  const raw = await runGit(["worktree", "list", "--porcelain"], { cwd: cwd2 });
+  const trees = [];
+  let cur = {};
+  const flush = () => {
+    if (cur.path) {
+      const entry = {
+        path: cur.path,
+        head: cur.head ?? "",
+        isBare: cur.isBare === true
+      };
+      if (cur.branch)
+        entry.branch = cur.branch;
+      trees.push(entry);
+    }
+    cur = {};
+  };
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) {
+      flush();
+      continue;
+    }
+    if (line.startsWith("worktree ")) {
+      flush();
+      cur.path = line.slice("worktree ".length).trim();
+    } else if (line.startsWith("HEAD ")) {
+      cur.head = line.slice("HEAD ".length).trim();
+    } else if (line.startsWith("branch ")) {
+      cur.branch = line.slice("branch refs/heads/".length).trim();
+    } else if (line === "bare") {
+      cur.isBare = true;
+    }
+  }
+  flush();
+  return trees;
+}
+async function worktreeAdd(path5, sha, cwd2) {
+  await runGit(["worktree", "add", "--detach", path5, sha], { cwd: cwd2 });
+}
+async function resetHardTo(sha, cwd2) {
+  await runGit(["reset", "--hard", sha], { cwd: cwd2 });
+}
+
+// ../../packages/diff-git/dist/parse-diff.js
+var FILE_HEADER = /^diff --git a\/(.+?) b\/(.+)$/;
+var HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/;
+function parseUnifiedDiff(text, baseSha, headSha) {
+  const lines = text.split("\n");
+  const files = [];
+  let current = null;
+  let currentHunk = null;
+  let renameFrom = null;
+  const finalizeHunk = () => {
+    if (current && currentHunk) {
+      current.hunks.push(currentHunk);
+      currentHunk = null;
+    }
+  };
+  const finalizeFile = () => {
+    finalizeHunk();
+    if (current)
+      files.push(current);
+    current = null;
+    renameFrom = null;
+  };
+  for (const line of lines) {
+    const headerMatch = line.match(FILE_HEADER);
+    if (headerMatch) {
+      finalizeFile();
+      const [, oldPath, newPath] = headerMatch;
+      current = {
+        path: newPath,
+        oldPath: oldPath === newPath ? void 0 : oldPath,
+        status: "modified",
+        additions: 0,
+        deletions: 0,
+        hunks: []
+      };
+      if (oldPath === newPath)
+        delete current.oldPath;
+      continue;
+    }
+    if (!current)
+      continue;
+    if (line.startsWith("new file mode"))
+      current.status = "added";
+    else if (line.startsWith("deleted file mode"))
+      current.status = "removed";
+    else if (line.startsWith("rename from ")) {
+      renameFrom = line.slice("rename from ".length);
+      current.status = "renamed";
+    } else if (line.startsWith("rename to ")) {
+      if (renameFrom)
+        current.oldPath = renameFrom;
+    }
+    const hunkMatch = line.match(HUNK_HEADER);
+    if (hunkMatch) {
+      finalizeHunk();
+      const [, oldStart, oldLines, newStart, newLines, header] = hunkMatch;
+      currentHunk = {
+        oldStart: Number(oldStart),
+        oldLines: oldLines ? Number(oldLines) : 1,
+        newStart: Number(newStart),
+        newLines: newLines ? Number(newLines) : 1,
+        header: (header ?? "").trim(),
+        body: ""
+      };
+      continue;
+    }
+    if (currentHunk && (line.startsWith("+") || line.startsWith("-") || line.startsWith(" "))) {
+      currentHunk.body += (currentHunk.body ? "\n" : "") + line;
+      if (line.startsWith("+") && !line.startsWith("+++"))
+        current.additions++;
+      if (line.startsWith("-") && !line.startsWith("---"))
+        current.deletions++;
+    }
+  }
+  finalizeFile();
+  return { baseSha, headSha, files };
+}
+
+// ../../packages/diff-git/dist/adapter.js
+var GitDiffAdapter = class {
+  options;
+  constructor(options) {
+    this.options = options;
+  }
+  async getDiff(ref) {
+    const raw = await diffRange(ref.baseSha, ref.headSha, this.options.cwd);
+    return parseUnifiedDiff(raw, ref.baseSha, ref.headSha);
+  }
+  async readFileAtSha(sha, path5) {
+    return showBlob(sha, path5, this.options.cwd);
+  }
+};
+
+// ../../packages/diff-git/dist/local-ref.js
+async function resolveLocalRef(args) {
+  const headRef = args.head ?? "HEAD";
+  const headSha = await revParse(headRef, args.cwd);
+  const baseSha = await mergeBase(args.base, headRef, args.cwd);
+  return {
+    kind: "local",
+    baseSha,
+    headSha,
+    baseRef: args.base,
+    headRef
+  };
+}
+
 // ../../packages/diff-git/dist/ensure-checkout.js
+import { promises as fs } from "node:fs";
+import * as path from "node:path";
 var EXCLUDE_MARKER_START = "# BEGIN semantic-diff-tracer (do not edit \u2014 managed by the Semantic Diff Tracer VSCode extension)";
 var EXCLUDE_MARKER_END = "# END semantic-diff-tracer";
 var EXCLUDE_BODY = ".sdt/";
@@ -22272,28 +22318,29 @@ async function inferDefaultRepo(cwd2) {
 }
 
 // src/pipeline.ts
-async function runPipeline(deps, ref) {
+async function runPipeline(deps, ref, opts = {}) {
+  const traceDepth = opts.traceDepth ?? DEFAULT_TRACE_DEPTH;
   const meta = await deps.pr.fetchMeta(ref);
   const diff = await deps.diff.getDiff(ref);
   const perspectives = await extractPerspectives(deps, { ref, meta, diff });
   const bundles = [];
   for (const p of perspectives.perspectives) {
-    bundles.push(await buildBundle(deps, ref, diff, p));
+    bundles.push(await buildBundle(deps, ref, diff, p, traceDepth));
   }
   return { meta, perspectives, bundles };
 }
-async function buildBundle(deps, ref, diff, perspective) {
+async function buildBundle(deps, ref, diff, perspective, traceDepth) {
   let summary;
   let flow;
   try {
-    summary = await summarize(deps, { ref, perspective, diff });
+    summary = await summarize(deps, { ref, perspective, diff, traceDepth });
   } catch (err) {
     deps.logger.warn("skill", `summarize failed for ${perspective.id}: ${String(err)}`);
   }
   try {
     flow = await planFlow(
       { ...deps, maxTurns: deps.flowMaxTurns },
-      { ref, perspective, diff }
+      { ref, perspective, diff, traceDepth }
     );
   } catch (err) {
     deps.logger.warn("skill", `planFlow failed for ${perspective.id}: ${String(err)}`);
@@ -23387,7 +23434,12 @@ function serializeBlock(b) {
 
 // src/main.ts
 function parseArgs(argv) {
-  const out = { input: "", noMermaidCdn: false, help: false };
+  const out = {
+    input: "",
+    noMermaidCdn: false,
+    traceDepth: parseTraceDepth(process.env["SDT_TRACE_DEPTH"]),
+    help: false
+  };
   const positional = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -23396,7 +23448,12 @@ function parseArgs(argv) {
       const v = argv[++i];
       if (v) out.outPath = v;
     } else if (a === "--no-mermaid-cdn") out.noMermaidCdn = true;
-    else positional.push(a);
+    else if (a === "--trace-depth") {
+      const v = argv[++i];
+      if (v) out.traceDepth = parseTraceDepth(v);
+    } else if (a.startsWith("--trace-depth=")) {
+      out.traceDepth = parseTraceDepth(a.slice("--trace-depth=".length));
+    } else positional.push(a);
   }
   out.input = positional[0] ?? "";
   return out;
@@ -23406,13 +23463,19 @@ function usage() {
 
 Usage:
   trace-diff <URL | owner/repo#N | #N | branch> [-o out.html] [--no-mermaid-cdn]
+              [--trace-depth normal|deep]
 
 Options:
-  -o, --out <path>       Output file path (default: ./sdt-report-<slug>.html)
-  --no-mermaid-cdn       Skip the Mermaid CDN <script>; visuals stay as source
+  -o, --out <path>            Output file path (default: ./sdt-report-<slug>.html)
+  --no-mermaid-cdn            Skip the Mermaid CDN <script>; visuals stay as source
+  --trace-depth normal|deep   How much source the LLM sees per perspective.
+                              normal (default) sends only the diff hunks and
+                              runs a single-turn ask with no tools; deep also
+                              preloads full/sliced files and enables Grep.
 
 Environment (same as the TUI):
   SDT_LANGUAGE, SDT_CLAUDE_MODEL, SDT_CLAUDE_EXECUTABLE, SDT_FLOW_MAX_TURNS,
+  SDT_TRACE_DEPTH (normal|deep, default: ${DEFAULT_TRACE_DEPTH}),
   GITHUB_TOKEN / GH_TOKEN
 `;
 }
@@ -23439,7 +23502,7 @@ async function main() {
     const checkout = await ensureCheckout(ref, { repoCwd: cwd2, logger: deps.logger });
     deps.diff = new GitDiffAdapter({ cwd: checkout.worktreePath });
   }
-  const result = await runPipeline(deps, ref);
+  const result = await runPipeline(deps, ref, { traceDepth: args.traceDepth });
   const html = renderReport({
     meta: result.meta,
     perspectives: result.perspectives,

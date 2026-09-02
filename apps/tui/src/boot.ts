@@ -7,7 +7,9 @@ import type {
   PrPort,
   PrRef,
   SessionStorePort,
+  TraceDepth,
 } from '@semantic-diff-tracer/core';
+import { parseTraceDepth } from '@semantic-diff-tracer/core';
 import { GitDiffAdapter, resolveLocalRef } from '@semantic-diff-tracer/diff-git';
 import {
   OctokitPrAdapter,
@@ -34,6 +36,8 @@ export interface TuiDeps {
   pr: PrPort;
   language: string;
   flowMaxTurns: number;
+  /** Default trace depth used before the user toggles it in the perspective screen. */
+  traceDepth: TraceDepth;
 }
 
 export interface BuildOptions {
@@ -72,7 +76,8 @@ export function buildTuiDeps(opts: BuildOptions): TuiDeps {
     },
   };
   const flowMaxTurns = clampFlowMaxTurns(process.env['SDT_FLOW_MAX_TURNS']);
-  return { cwd: opts.cwd, llm, diff, sessionStore, logger, pr, language, flowMaxTurns };
+  const traceDepth = parseTraceDepth(process.env['SDT_TRACE_DEPTH']);
+  return { cwd: opts.cwd, llm, diff, sessionStore, logger, pr, language, flowMaxTurns, traceDepth };
 }
 
 // Falls back to `gh auth token` so a logged-in gh CLI works without exporting

@@ -3,7 +3,10 @@ import type { PerspectiveDraft } from '../domain/perspective.js';
 import type { UnifiedDiff } from '../domain/diff.js';
 import type { DiffPort } from '../ports/diff.js';
 import type { PrRef } from '../domain/pr-ref.js';
-import { buildPerspectiveCodeContext } from './perspective-code-context.js';
+import {
+  buildHunkOnlyCodeContext,
+  buildPerspectiveCodeContext,
+} from './perspective-code-context.js';
 
 function draft(files: Array<{ file: string; hunkIndex: number }>): PerspectiveDraft {
   return {
@@ -106,7 +109,8 @@ describe('buildPerspectiveCodeContext', () => {
       port,
     );
     expect(result.fullFiles).toEqual([]);
-    expect(result.slicedFiles).toEqual(['gone.ts']);
+    expect(result.slicedFiles).toEqual([]);
+    expect(result.hunkOnlyFiles).toEqual(['gone.ts']);
     expect(result.text).toContain('gone.ts (diff hunk #0');
     expect(result.text).toContain('+added line');
   });
@@ -122,5 +126,49 @@ describe('buildPerspectiveCodeContext', () => {
     );
     expect(result.text).toBe('');
     expect(result.bytes).toBe(0);
+  });
+});
+
+describe('buildHunkOnlyCodeContext', () => {
+  it('embeds only the raw diff hunk bodies without reading any file', () => {
+    const diff = diffFor(['a.ts']);
+    const result = buildHunkOnlyCodeContext(
+      draft([{ file: 'a.ts', hunkIndex: 0 }]),
+      diff,
+    );
+    expect(result.fullFiles).toEqual([]);
+    expect(result.slicedFiles).toEqual([]);
+    expect(result.hunkOnlyFiles).toEqual(['a.ts']);
+    expect(result.text).toContain('## Diff hunks');
+    expect(result.text).toContain('a.ts (diff hunk #0');
+    expect(result.text).toContain('+added line');
+  });
+
+  it('ignores peripheral hunks the same way the deep path does', () => {
+    const diff = diffFor(['primary.ts', 'peripheral.ts']);
+    const persp: PerspectiveDraft = {
+      id: 'p1',
+      title: 't',
+      outcome: 'o',
+      kind: 'feature',
+      hunkRefs: [
+        { file: 'primary.ts', hunkIndex: 0, role: 'primary' },
+        { file: 'peripheral.ts', hunkIndex: 0, role: 'peripheral' },
+      ],
+    };
+    const result = buildHunkOnlyCodeContext(persp, diff);
+    expect(result.hunkOnlyFiles).toEqual(['primary.ts']);
+    expect(result.text).not.toContain('peripheral.ts');
+  });
+
+  it('returns empty result when no primary hunks match a file in the diff', () => {
+    const diff = diffFor([]);
+    const result = buildHunkOnlyCodeContext(
+      draft([{ file: 'nope.ts', hunkIndex: 0 }]),
+      diff,
+    );
+    expect(result.text).toBe('');
+    expect(result.bytes).toBe(0);
+    expect(result.hunkOnlyFiles).toEqual([]);
   });
 });

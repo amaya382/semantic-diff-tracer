@@ -185,11 +185,12 @@ debug adapter も実行系もありません。block tree は 1 度計画され�
 
 ### パイプライン
 
-| 設定                    | 既定値 | 説明                                                                                                                                         |
-| ----------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sdt.defaultBaseBranch` | `main` | `Review Current Branch` で使う base ブランチ                                                                                                 |
-| `sdt.language`          | `en`   | すべての LLM prompt の末尾に付ける自由記述の language hint（`en`、`ja`、`zh`、`Español` など）。summary や flow のナラティブ、Q&A 回答に効く |
-| `sdt.flowMaxTurns`      | `20`   | Flow 計画や refine の agent turn 上限。agent loop を持たない adapter は無視                                                                  |
+| 設定                    | 既定値   | 説明                                                                                                                                                                        |
+| ----------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sdt.defaultBaseBranch` | `main`   | `Review Current Branch` で使う base ブランチ                                                                                                                                |
+| `sdt.language`          | `en`     | すべての LLM prompt の末尾に付ける自由記述の language hint（`en`、`ja`、`zh`、`Español` など）。summary や flow のナラティブ、Q&A 回答に効く                                |
+| `sdt.flowMaxTurns`      | `20`     | Flow 計画や refine の agent turn 上限。`sdt.traceDepth` が `normal` のときは無視される（常に single-turn で走る）                                                            |
+| `sdt.traceDepth`        | `normal` | `normal` は Summary / Flow の ask に diff hunk のみを渡し、tool 無し・single-turn で聞く。`deep` は主要ファイルもプリロードして Grep を許可する。Perspectives view header の toggle で切り替え |
 
 ### Claude adapter（LLM バックエンド）
 
@@ -234,6 +235,7 @@ sdt <URL | owner/repo#N | #N | branch>
 | `SDT_CLAUDE_MODEL`          | `sonnet` / `opus` / `haiku` / `inherit` / full model id（既定：SDK 既定） |
 | `SDT_CLAUDE_EFFORT`         | `low` / `medium` / `high` / `max`（既定：SDK 既定）                       |
 | `SDT_CLAUDE_EXECUTABLE`     | `claude` CLI の絶対パス（既定：`PATH` から解決）                          |
+| `SDT_TRACE_DEPTH`           | `normal`（既定）または `deep` — 初期 trace depth。perspective 選択画面で `d` キーで toggle 可能 |
 | `GITHUB_TOKEN` / `GH_TOKEN` | GitHub 資格情報。ターミナルには VSCode の auth provider がないので必要    |
 
 ## 🤖 Claude Code skill: `trace-diff`
@@ -248,12 +250,15 @@ VSCode extension と比べて、`trace-diff` は **mock refine** と **Q&A pin**
 
 ```bash
 node ~/.claude/skills/trace-diff/bin/render.mjs \
-  <URL | owner/repo#N | #N | branch> [-o out.html] [--no-mermaid-cdn]
+  <URL | owner/repo#N | #N | branch> \
+  [-o out.html] [--no-mermaid-cdn] [--trace-depth normal|deep]
 ```
+
+`--trace-depth` は観点ごとに LLM が読むソースの量を決めます。`normal`（既定）は diff hunk のみを渡し、tool 無し・single-turn で聞きます。`deep` は主要ファイルもプリロードし、Grep を許可します。
 
 もしくは Claude Code に対して「この PR を HTML レポートにして」「trace-diff で PR 見せて」と依頼すれば、SKILL.md のトリガに沿って呼び出されます。
 
-binary は生成した HTML の絶対パスを stdout に出力するので、それをそのままユーザーに返してください。読む環境変数は TUI と同じ（`SDT_LANGUAGE`, `SDT_CLAUDE_MODEL`, `SDT_CLAUDE_EXECUTABLE`, `SDT_FLOW_MAX_TURNS`, `GITHUB_TOKEN` / `GH_TOKEN`）です。
+binary は生成した HTML の絶対パスを stdout に出力するので、それをそのままユーザーに返してください。読む環境変数は TUI と同じ（`SDT_LANGUAGE`, `SDT_CLAUDE_MODEL`, `SDT_CLAUDE_EXECUTABLE`, `SDT_FLOW_MAX_TURNS`, `SDT_TRACE_DEPTH`, `GITHUB_TOKEN` / `GH_TOKEN`）です。
 
 ### オフライン / エアギャップモード
 

@@ -4,9 +4,10 @@ import type {
   PerspectiveSet,
   PrRef,
   SummaryPayload,
+  TraceDepth,
   UnifiedDiff,
 } from '@semantic-diff-tracer/core';
-import { extractPerspectives, planFlow, summarize } from '@semantic-diff-tracer/core';
+import { DEFAULT_TRACE_DEPTH, extractPerspectives, planFlow, summarize } from '@semantic-diff-tracer/core';
 import type { PrMeta } from '@semantic-diff-tracer/core';
 import type { SkillDeps } from './boot.js';
 import type { PerspectiveBundle } from './render/index.js';
@@ -17,6 +18,11 @@ export interface PipelineResult {
   bundles: PerspectiveBundle[];
 }
 
+export interface PipelineOptions {
+  /** Depth of source the LLM sees per perspective. Default: `normal`. */
+  traceDepth?: TraceDepth;
+}
+
 /**
  * Serial pipeline for the skill: fetch diff, extract perspectives, then loop
  * one perspective at a time producing its summary and flow. Serial by design —
@@ -25,13 +31,18 @@ export interface PipelineResult {
  * failure recovery. Each perspective is best-effort: a failure logs and moves
  * on so a single broken flow does not sink the whole report.
  */
-export async function runPipeline(deps: SkillDeps, ref: PrRef): Promise<PipelineResult> {
+export async function runPipeline(
+  deps: SkillDeps,
+  ref: PrRef,
+  opts: PipelineOptions = {},
+): Promise<PipelineResult> {
+  const traceDepth = opts.traceDepth ?? DEFAULT_TRACE_DEPTH;
   const meta = await deps.pr.fetchMeta(ref);
   const diff = await deps.diff.getDiff(ref);
   const perspectives = await extractPerspectives(deps, { ref, meta, diff });
   const bundles: PerspectiveBundle[] = [];
   for (const p of perspectives.perspectives) {
-    bundles.push(await buildBundle(deps, ref, diff, p));
+    bundles.push(await buildBundle(deps, ref, diff, p, traceDepth));
   }
   return { meta, perspectives, bundles };
 }
@@ -41,18 +52,19 @@ async function buildBundle(
   ref: PrRef,
   diff: UnifiedDiff,
   perspective: PerspectiveDraft,
+  traceDepth: TraceDepth,
 ): Promise<PerspectiveBundle> {
   let summary: SummaryPayload | undefined;
   let flow: Flow | undefined;
   try {
-    summary = await summarize(deps, { ref, perspective, diff });
+    summary = await summarize(deps, { ref, perspective, diff, traceDepth });
   } catch (err) {
     deps.logger.warn('skill', `summarize failed for ${perspective.id}: ${String(err)}`);
   }
   try {
     flow = await planFlow(
       { ...deps, maxTurns: deps.flowMaxTurns },
-      { ref, perspective, diff },
+      { ref, perspective, diff, traceDepth },
     );
   } catch (err) {
     deps.logger.warn('skill', `planFlow failed for ${perspective.id}: ${String(err)}`);

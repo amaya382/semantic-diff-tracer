@@ -17,6 +17,8 @@ export interface CodeContextResult {
   fullFiles: string[];
   /** Files where hunk-anchored slices were used instead. */
   slicedFiles: string[];
+  /** Files where only the raw diff hunk body was embedded (traceDepth=normal, or a full/slice read failed). */
+  hunkOnlyFiles: string[];
   /** Byte length of `text` — useful for logging. */
   bytes: number;
 }
@@ -49,6 +51,7 @@ export async function buildPerspectiveCodeContext(
   const sections: string[] = [];
   const fullFiles: string[] = [];
   const slicedFiles: string[] = [];
+  const hunkOnlyFiles: string[] = [];
   let usedBytes = 0;
 
   for (const path of primaryFiles) {
@@ -57,7 +60,7 @@ export async function buildPerspectiveCodeContext(
       const fallback = buildHunkFallbackSection(path, primaryRefs, diff);
       if (fallback) {
         sections.push(fallback);
-        slicedFiles.push(path);
+        hunkOnlyFiles.push(path);
       }
       continue;
     }
@@ -78,10 +81,42 @@ export async function buildPerspectiveCodeContext(
   }
 
   if (sections.length === 0) {
-    return { text: '', fullFiles, slicedFiles, bytes: 0 };
+    return { text: '', fullFiles, slicedFiles, hunkOnlyFiles, bytes: 0 };
   }
   const text = `## Code (post-merge)\n\n${sections.join('\n\n')}`;
-  return { text, fullFiles, slicedFiles, bytes: Buffer.byteLength(text, 'utf8') };
+  return { text, fullFiles, slicedFiles, hunkOnlyFiles, bytes: Buffer.byteLength(text, 'utf8') };
+}
+
+/**
+ * Build the traceDepth=normal context: only the diff hunk bodies, no file
+ * reads. Callers use this to keep the ask a single-turn / no-tools shot.
+ */
+export function buildHunkOnlyCodeContext(
+  perspective: PerspectiveDraft,
+  diff: UnifiedDiff,
+): CodeContextResult {
+  const primaryRefs = perspective.hunkRefs.filter((r) => (r.role ?? 'primary') === 'primary');
+  const primaryFiles = uniquePrimaryFiles(primaryRefs);
+  const sections: string[] = [];
+  const hunkOnlyFiles: string[] = [];
+  for (const path of primaryFiles) {
+    const section = buildHunkFallbackSection(path, primaryRefs, diff);
+    if (section) {
+      sections.push(section);
+      hunkOnlyFiles.push(path);
+    }
+  }
+  if (sections.length === 0) {
+    return { text: '', fullFiles: [], slicedFiles: [], hunkOnlyFiles, bytes: 0 };
+  }
+  const text = `## Diff hunks (only source available)\n\n${sections.join('\n\n')}`;
+  return {
+    text,
+    fullFiles: [],
+    slicedFiles: [],
+    hunkOnlyFiles,
+    bytes: Buffer.byteLength(text, 'utf8'),
+  };
 }
 
 function uniquePrimaryFiles(refs: readonly HunkRef[]): string[] {

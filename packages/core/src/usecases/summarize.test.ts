@@ -125,7 +125,25 @@ const SUMMARY_RESPONSE = JSON.stringify({
 });
 
 describe('summarize', () => {
-  it('embeds preloaded code and restricts tools to Grep', async () => {
+  it('deep mode embeds preloaded code and restricts tools to Grep', async () => {
+    const store = new MemStore();
+    const { llm, capture } = makeLlm(SUMMARY_RESPONSE);
+    const diffPort = new RecorderDiff(diff(), {
+      'src/auth.ts': 'export function refresh() { return "ok"; }',
+    });
+    await summarize(
+      { llm, diff: diffPort, sessionStore: store },
+      { ref: ref(), perspective: perspective(), traceDepth: 'deep' },
+    );
+    expect(capture.asks).toHaveLength(1);
+    const [ask] = capture.asks;
+    expect(ask?.tools).toEqual(['Grep']);
+    expect(ask?.maxTurns).toBeUndefined();
+    expect(ask?.user).toContain('src/auth.ts');
+    expect(ask?.user).toContain('export function refresh');
+  });
+
+  it('normal mode (default) sends only diff hunks, disables tools, and caps at one turn', async () => {
     const store = new MemStore();
     const { llm, capture } = makeLlm(SUMMARY_RESPONSE);
     const diffPort = new RecorderDiff(diff(), {
@@ -135,11 +153,11 @@ describe('summarize', () => {
       { llm, diff: diffPort, sessionStore: store },
       { ref: ref(), perspective: perspective() },
     );
-    expect(capture.asks).toHaveLength(1);
     const [ask] = capture.asks;
-    expect(ask?.tools).toEqual(['Grep']);
-    expect(ask?.user).toContain('src/auth.ts');
-    expect(ask?.user).toContain('export function refresh');
+    expect(ask?.tools).toEqual([]);
+    expect(ask?.maxTurns).toBe(1);
+    expect(ask?.user).toContain('Diff hunks');
+    expect(ask?.user).not.toContain('export function refresh');
   });
 
   it('starts a fresh conversation instead of forking a base session', async () => {

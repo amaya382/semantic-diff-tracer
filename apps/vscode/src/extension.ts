@@ -57,6 +57,7 @@ import {
   readDefaultBaseBranch,
   readFlowMaxTurns,
   readLanguageHint,
+  readTraceDepth,
 } from './llm/settings.js';
 import {
   makeInitialState,
@@ -74,6 +75,7 @@ interface Deps {
 export function activate(context: vscode.ExtensionContext): void {
   const openedFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const state: ExtensionState = makeInitialState();
+  state.traceDepth = readTraceDepth();
   const notifier = new VscodeNotifier();
   const outputChannel = vscode.window.createOutputChannel('Semantic Diff Tracer');
   context.subscriptions.push(outputChannel);
@@ -92,6 +94,13 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   const sidePanel = new SidePanelProvider(context);
+  sidePanel.setCallbacks({
+    onTraceDepthChange: (depth) => {
+      state.traceDepth = depth;
+      logger.info('extension', 'trace depth changed', { traceDepth: depth });
+    },
+  });
+  sidePanel.setTraceDepth(state.traceDepth);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider('sdt.side', sidePanel, {
       webviewOptions: { retainContextWhenHidden: true },
@@ -361,7 +370,12 @@ export function activate(context: vscode.ExtensionContext): void {
             logger,
             language: readLanguageHint(),
           },
-          { ref, perspective, ...(state.diff ? { diff: state.diff } : {}) },
+          {
+            ref,
+            perspective,
+            traceDepth: state.traceDepth,
+            ...(state.diff ? { diff: state.diff } : {}),
+          },
         );
         state.summaries.set(perspective.id, payload);
       } catch (e) {
@@ -403,7 +417,12 @@ export function activate(context: vscode.ExtensionContext): void {
             language: readLanguageHint(),
             maxTurns: readFlowMaxTurns(),
           },
-          { ref, perspective, ...(state.diff ? { diff: state.diff } : {}) },
+          {
+            ref,
+            perspective,
+            traceDepth: state.traceDepth,
+            ...(state.diff ? { diff: state.diff } : {}),
+          },
         );
         state.flows.set(perspective.id, flow);
         advanceLoading(perspective, 'flow', 'Loading source files');

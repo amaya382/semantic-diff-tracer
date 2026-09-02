@@ -1,5 +1,5 @@
-import type { PerspectiveDraft, PrRef, QaSection } from '@semantic-diff-tracer/core';
-import { askQa, followUpQa, summarize } from '@semantic-diff-tracer/core';
+import type { PerspectiveDraft, PrRef, QaSection, TraceDepth } from '@semantic-diff-tracer/core';
+import { DEFAULT_TRACE_DEPTH, askQa, followUpQa, summarize } from '@semantic-diff-tracer/core';
 import type { TuiDeps } from '../boot.js';
 import { ask } from '../io/prompt.js';
 
@@ -13,8 +13,9 @@ export async function runSummaryScreen(
   deps: TuiDeps,
   ref: PrRef,
   perspective: PerspectiveDraft,
+  traceDepth: TraceDepth = DEFAULT_TRACE_DEPTH,
 ): Promise<SummaryOutcome> {
-  console.log('\nLoading summary…');
+  console.log(`\nLoading summary (trace-depth=${traceDepth})…`);
   const payload = await summarize(
     {
       llm: deps.llm,
@@ -23,7 +24,7 @@ export async function runSummaryScreen(
       logger: deps.logger,
       language: deps.language,
     },
-    { ref, perspective },
+    { ref, perspective, traceDepth },
   );
   console.log(`\n== ${perspective.title} ==\n`);
   console.log(`Outcome: ${payload.summary.outcome}\n`);
