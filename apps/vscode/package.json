@@ -2,7 +2,7 @@
   "name": "semantic-diff-tracer",
   "displayName": "Semantic Diff Tracer",
   "description": "Grasp a GitHub PR fast: outcome-based perspectives, story-mode trace, drag-select ask.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "amaya382",
   "license": "MIT",
   "icon": "media/icon.png",
