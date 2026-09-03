@@ -146,6 +146,8 @@ type Block = {
   "children": [ Block ]
 }
 
+All \`focus.startLine\`/\`focus.endLine\`, \`concerns[].anchor.line\`, and any file line numbers you emit are in **post-merge (new-file) line-space** — the same numbers shown in the code context's gutter. Read them straight from the gutter; do not count positions within a hunk body. \`beforeFocus.startLine\`/\`beforeFocus.endLine\` are the sole exception: they are in **base-side (pre-merge) line-space** and correspond to the base-side gutter numbers.
+
 Start the response with '{' and end with '}'. Field names are load-bearing.`;
 
 export function buildFlowSystemPrompt(kind: PerspectiveKind): string {

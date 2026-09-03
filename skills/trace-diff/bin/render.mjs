@@ -655,13 +655,49 @@ function buildHunkFallbackSection(path5, refs, diff) {
     const hunk = file.hunks[idx];
     if (!hunk)
       continue;
-    parts.push(`### ${path5} (diff hunk #${idx}, base-side fallback)
-\`\`\`diff
-${hunk.header}
-${hunk.body}
+    const newEnd = hunk.newLines > 0 ? hunk.newStart + hunk.newLines - 1 : hunk.newStart;
+    const gutterWidth = Math.max(String(hunk.newStart + Math.max(hunk.newLines, 1) - 1).length, String(hunk.oldStart + Math.max(hunk.oldLines, 1) - 1).length);
+    const contextLine = hunk.header.trim() !== "" ? `_context: ${hunk.header.trim()}_
+` : "";
+    const anchor = renderHunkAnchor(hunk);
+    const body = renderGutterBody(hunk, gutterWidth);
+    parts.push(`### ${path5} \u2014 hunk #${idx}, new lines ${hunk.newStart}-${newEnd} (post-merge line-space)
+${contextLine}\`\`\`diff
+${anchor}
+${body}
 \`\`\``);
   }
   return parts.length > 0 ? parts.join("\n\n") : null;
+}
+function renderHunkAnchor(hunk) {
+  return `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`;
+}
+function renderGutterBody(hunk, gutterWidth) {
+  const pad = (n) => n === null ? " ".repeat(gutterWidth) : String(n).padStart(gutterWidth, " ");
+  const lines = hunk.body === "" ? [] : hunk.body.split("\n");
+  let newN = hunk.newStart;
+  let oldM = hunk.oldStart;
+  const out = [];
+  for (const line of lines) {
+    if (line.startsWith("\\")) {
+      out.push(line);
+      continue;
+    }
+    if (line.startsWith("+")) {
+      out.push(`${pad(newN)} ${pad(null)} + ${line.slice(1)}`);
+      newN += 1;
+    } else if (line.startsWith("-")) {
+      out.push(`${pad(null)} ${pad(oldM)} - ${line.slice(1)}`);
+      oldM += 1;
+    } else if (line.startsWith(" ")) {
+      out.push(`${pad(newN)} ${pad(oldM)}   ${line.slice(1)}`);
+      newN += 1;
+      oldM += 1;
+    } else {
+      out.push(line);
+    }
+  }
+  return out.join("\n");
 }
 function sliceRangeForHunk(hunk, contextLines, head) {
   const totalLines = head.split("\n").length;
@@ -769,6 +805,8 @@ Output STRICT JSON (no prose, no markdown fences):
   "watchFor": [ { "anchor": { "file": string, "line": number } | null, "note": string } ],
   "visuals": [ Visual ]
 }
+
+\`tests[].line\` and \`watchFor[].anchor.line\` are **post-merge (new-file) line numbers**. When the code context shows diff hunks only, use the gutter numbers you see; do not count body positions.
 
 type Visual =
   | { "kind": "mermaid",        "source": string, "caption": string }
@@ -992,6 +1030,8 @@ type Block = {
   } | null,
   "children": [ Block ]
 }
+
+All \`focus.startLine\`/\`focus.endLine\`, \`concerns[].anchor.line\`, and any file line numbers you emit are in **post-merge (new-file) line-space** \u2014 the same numbers shown in the code context's gutter. Read them straight from the gutter; do not count positions within a hunk body. \`beforeFocus.startLine\`/\`beforeFocus.endLine\` are the sole exception: they are in **base-side (pre-merge) line-space** and correspond to the base-side gutter numbers.
 
 Start the response with '{' and end with '}'. Field names are load-bearing.`;
 function buildFlowSystemPrompt(kind) {

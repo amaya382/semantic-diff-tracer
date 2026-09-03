@@ -54,6 +54,8 @@ Output STRICT JSON (no prose, no markdown fences):
   "visuals": [ Visual ]
 }
 
+\`tests[].line\` and \`watchFor[].anchor.line\` are **post-merge (new-file) line numbers**. When the code context shows diff hunks only, use the gutter numbers you see; do not count body positions.
+
 type Visual =
   | { "kind": "mermaid",        "source": string, "caption": string }
   | { "kind": "diff",           "source": string, "caption": string, "language": string | null }
