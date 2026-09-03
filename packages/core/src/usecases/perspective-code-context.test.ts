@@ -111,8 +111,10 @@ describe('buildPerspectiveCodeContext', () => {
     expect(result.fullFiles).toEqual([]);
     expect(result.slicedFiles).toEqual([]);
     expect(result.hunkOnlyFiles).toEqual(['gone.ts']);
-    expect(result.text).toContain('gone.ts (diff hunk #0');
-    expect(result.text).toContain('+added line');
+    expect(result.text).toContain('gone.ts — hunk #0, new lines 10-12');
+    expect(result.text).toContain('(post-merge line-space)');
+    expect(result.text).toContain('@@ -1,1 +10,3 @@');
+    expect(result.text).toContain('+ added line');
   });
 
   it('returns empty text when no file yields content', async () => {
@@ -140,8 +142,43 @@ describe('buildHunkOnlyCodeContext', () => {
     expect(result.slicedFiles).toEqual([]);
     expect(result.hunkOnlyFiles).toEqual(['a.ts']);
     expect(result.text).toContain('## Diff hunks');
-    expect(result.text).toContain('a.ts (diff hunk #0');
-    expect(result.text).toContain('+added line');
+    expect(result.text).toContain('a.ts — hunk #0, new lines 10-12');
+    expect(result.text).toContain('(post-merge line-space)');
+    expect(result.text).toContain('@@ -1,1 +10,3 @@');
+    expect(result.text).toContain('+ added line');
+  });
+
+  it('renders deletion hunks with the base-side gutter populated', () => {
+    const diff: UnifiedDiff = {
+      baseSha: 'base-sha',
+      headSha: 'head-sha',
+      files: [
+        {
+          path: 'del.ts',
+          status: 'modified',
+          additions: 0,
+          deletions: 1,
+          hunks: [
+            {
+              oldStart: 5,
+              oldLines: 2,
+              newStart: 5,
+              newLines: 1,
+              header: '',
+              body: ' keep\n-drop',
+            },
+          ],
+        },
+      ],
+    };
+    const result = buildHunkOnlyCodeContext(
+      draft([{ file: 'del.ts', hunkIndex: 0 }]),
+      diff,
+    );
+    expect(result.text).toContain('del.ts — hunk #0, new lines 5-5');
+    expect(result.text).toContain('@@ -5,2 +5,1 @@');
+    expect(result.text).toContain('5 5   keep');
+    expect(result.text).toContain('  6 - drop');
   });
 
   it('ignores peripheral hunks the same way the deep path does', () => {

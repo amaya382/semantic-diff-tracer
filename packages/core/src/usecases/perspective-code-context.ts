@@ -173,11 +173,53 @@ function buildHunkFallbackSection(
   for (const idx of hunkIndices) {
     const hunk = file.hunks[idx];
     if (!hunk) continue;
+    const newEnd = hunk.newLines > 0 ? hunk.newStart + hunk.newLines - 1 : hunk.newStart;
+    const gutterWidth = Math.max(
+      String(hunk.newStart + Math.max(hunk.newLines, 1) - 1).length,
+      String(hunk.oldStart + Math.max(hunk.oldLines, 1) - 1).length,
+    );
+    const contextLine =
+      hunk.header.trim() !== '' ? `_context: ${hunk.header.trim()}_\n` : '';
+    const anchor = renderHunkAnchor(hunk);
+    const body = renderGutterBody(hunk, gutterWidth);
     parts.push(
-      `### ${path} (diff hunk #${idx}, base-side fallback)\n\`\`\`diff\n${hunk.header}\n${hunk.body}\n\`\`\``,
+      `### ${path} — hunk #${idx}, new lines ${hunk.newStart}-${newEnd} (post-merge line-space)\n${contextLine}\`\`\`diff\n${anchor}\n${body}\n\`\`\``,
     );
   }
   return parts.length > 0 ? parts.join('\n\n') : null;
+}
+
+function renderHunkAnchor(hunk: Hunk): string {
+  return `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`;
+}
+
+function renderGutterBody(hunk: Hunk, gutterWidth: number): string {
+  const pad = (n: number | null): string =>
+    n === null ? ' '.repeat(gutterWidth) : String(n).padStart(gutterWidth, ' ');
+  const lines = hunk.body === '' ? [] : hunk.body.split('\n');
+  let newN = hunk.newStart;
+  let oldM = hunk.oldStart;
+  const out: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith('\\')) {
+      out.push(line);
+      continue;
+    }
+    if (line.startsWith('+')) {
+      out.push(`${pad(newN)} ${pad(null)} + ${line.slice(1)}`);
+      newN += 1;
+    } else if (line.startsWith('-')) {
+      out.push(`${pad(null)} ${pad(oldM)} - ${line.slice(1)}`);
+      oldM += 1;
+    } else if (line.startsWith(' ')) {
+      out.push(`${pad(newN)} ${pad(oldM)}   ${line.slice(1)}`);
+      newN += 1;
+      oldM += 1;
+    } else {
+      out.push(line);
+    }
+  }
+  return out.join('\n');
 }
 
 function sliceRangeForHunk(hunk: Hunk, contextLines: number, head: string): [number, number] {
